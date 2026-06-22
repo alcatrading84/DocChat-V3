@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+~/.docchat/
+.env
+venv/
+.venv/
