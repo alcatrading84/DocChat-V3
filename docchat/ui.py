@@ -261,11 +261,13 @@ class DocChatWindow(QMainWindow):
             return
         self.progress_label.setText(f"⏳ Procesando {os.path.basename(filepath)}...")
         self.btn_send.setEnabled(False)
-        w = DocLoadWorker(self.engine, filepath)
-        w.progress.connect(self._on_progress)
-        w.finished.connect(self._on_doc_done)
-        w.error.connect(self._on_doc_error)
-        w.start()
+        self._worker = DocLoadWorker(self.engine, filepath)
+        self._worker.progress.connect(self._on_progress)
+        self._worker.finished.connect(self._on_doc_done)
+        self._worker.error.connect(self._on_doc_error)
+        self._worker.finished.connect(lambda: setattr(self, '_worker', None))
+        self._worker.error.connect(lambda: setattr(self, '_worker', None))
+        self._worker.start()
 
     def _on_progress(self, actual, total, msg):
         self.progress_label.setText(f"⏳ {msg}")
@@ -273,17 +275,21 @@ class DocChatWindow(QMainWindow):
     def _on_doc_done(self, result):
         self.btn_send.setEnabled(True)
         self.progress_label.setText("")
-        if result["status"] == "ok":
-            self.doc_list.addItem(
-                QListWidgetItem(f"✅ {result['filename']} ({result['chunks']} frags)")
-            )
-            self._msg("system",
-                f"✅ **{result['filename']}** cargado.\n"
-                f"{result['chunks']} fragmentos · {result['total_chars']:,} caracteres"
-            )
-            self.sb.showMessage(f"✅ {result['filename']}", 3000)
-        else:
-            self._msg("error", result["message"])
+        try:
+            if result and result.get("status") == "ok":
+                self.doc_list.addItem(
+                    QListWidgetItem(f"✅ {result['filename']} ({result['chunks']} frags)")
+                )
+                self._msg("system",
+                    f"✅ **{result['filename']}** cargado.\n"
+                    f"{result['chunks']} fragmentos · {result['total_chars']:,} caracteres"
+                )
+                self.sb.showMessage(f"✅ {result['filename']}", 3000)
+            else:
+                msg = result.get("message", "Error desconocido") if result else "Error al procesar"
+                self._msg("error", msg)
+        except Exception as e:
+            self._msg("error", f"Error al mostrar resultado: {e}")
         self._update_stats()
 
     def _on_doc_error(self, error):
@@ -311,21 +317,24 @@ class DocChatWindow(QMainWindow):
         self.typing_label.setText("🤖 Escribiendo...")
 
         uc = self.rag_btn.isChecked()
-        w = StreamWorker(self.engine, q, uc)
-        w.token.connect(self._on_token)
-        w.finished.connect(self._on_response_done)
-        w.error.connect(self._on_response_error)
-        w.start()
+        self._stream_worker = StreamWorker(self.engine, q, uc)
+        self._stream_worker.token.connect(self._on_token)
+        self._stream_worker.finished.connect(self._on_response_done)
+        self._stream_worker.error.connect(self._on_response_error)
+        self._stream_worker.finished.connect(lambda: setattr(self, '_stream_worker', None))
+        self._stream_worker.error.connect(lambda: setattr(self, '_stream_worker', None))
+        self._stream_worker.start()
 
     def _on_token(self, token):
         """Cada token nuevo se muestra al instante."""
-        self._current_response += token
-        # Actualizar el último mensaje del asistente
-        self.chat.append(f"<span style='color:#81c784;'>{token}</span>")
-        # Scroll automático
-        c = self.chat.textCursor()
-        c.movePosition(QTextCursor.MoveOperation.End)
-        self.chat.setTextCursor(c)
+        try:
+            self._current_response += token
+            self.chat.insertPlainText(token)
+            c = self.chat.textCursor()
+            c.movePosition(QTextCursor.MoveOperation.End)
+            self.chat.setTextCursor(c)
+        except Exception:
+            pass  # No romper la app si hay error de UI
 
     def _on_response_done(self, full):
         self.btn_send.setEnabled(True)
