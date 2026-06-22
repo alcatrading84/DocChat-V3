@@ -301,8 +301,22 @@ class DocChatWindow(QMainWindow):
 
     def _on_doc_error(self, error: str):
         self.btn_send.setEnabled(True)
-        self._append_chat("error", f"Error al cargar documento: {error}")
-        self.status_bar.showMessage("❌ Error al cargar", 3000)
+        # Mensajes de error más amigables
+        friendly = error
+        if "encrypted" in error.lower() or "decrypt" in error.lower():
+            friendly = (
+                "El PDF está protegido con contraseña. "
+                "Abre el PDF con un programa normal, "
+                "guarda una copia sin protección, e intenta de nuevo."
+            )
+        elif "timeout" in error.lower():
+            friendly = (
+                "LM Studio tardó demasiado en responder. "
+                "Prueba con un documento más pequeño o "
+                "verifica que el modelo esté bien cargado en LM Studio."
+            )
+        self._append_chat("error", f"❌ {friendly}")
+        self.status_bar.showMessage("❌ Error al cargar", 5000)
 
     def _send_query(self):
         question = self.input_field.text().strip()
@@ -329,10 +343,20 @@ class DocChatWindow(QMainWindow):
         self.status_bar.showMessage("✅ Respondido", 3000)
 
     def _on_query_error(self, error: str):
-        self._append_chat("error", f"Error: {error}")
+        friendly = error
+        if "timeout" in error.lower():
+            friendly = (
+                "LM Studio tardó en responder. "
+                "Puede ser porque:\n"
+                "  • El modelo está cargándose\n"
+                "  • El documento tiene muchos fragmentos\n"
+                "  • La pregunta es muy compleja\n\n"
+                "Espera unos segundos y vuelve a intentar."
+            )
+        self._append_chat("error", f"❌ {friendly}")
         self.btn_send.setEnabled(True)
         self.input_field.setEnabled(True)
-        self.status_bar.showMessage("❌ Error", 3000)
+        self.status_bar.showMessage("❌ Error de conexión con LM Studio", 5000)
 
     def _clear_all(self):
         """Limpiar todos los documentos."""

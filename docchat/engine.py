@@ -35,7 +35,28 @@ class LMStudioClient:
 
     def __init__(self, base_url: str = LM_STUDIO_URL):
         self.base_url = base_url
-        self.client = httpx.Client(timeout=60)
+        self.client = httpx.Client(timeout=120)  # 2 min para modelos grandes
+
+    def _post(self, endpoint: str, payload: dict, max_retries: int = 2) -> dict:
+        """POST con reintentos y timeout más largo."""
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                resp = self.client.post(
+                    f"{self.base_url}{endpoint}",
+                    json=payload,
+                    timeout=180,  # 3 min por si el modelo tarda
+                )
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.TimeoutException as e:
+                last_error = f"Timeout ({attempt+1}/{max_retries+1}): el modelo está procesando"
+            except httpx.HTTPStatusError as e:
+                raise RuntimeError(f"LM Studio error {e.response.status_code}: {e.response.text[:200]}")
+            except Exception as e:
+                last_error = str(e)
+        raise TimeoutError(f"LM Studio no responde después de {max_retries+1} intentos. "
+                          f"Verifica que el modelo esté cargado en LM Studio. Error: {last_error}")
 
     def chat(self, messages: List[Dict], model: str = CHAT_MODEL,
              max_tokens: int = 1024, temperature: float = 0.7) -> str:
@@ -47,32 +68,19 @@ class LMStudioClient:
             "temperature": temperature,
             "stream": False,
         }
-        resp = self.client.post(f"{self.base_url}/chat/completions", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+        data = self._post("/chat/completions", payload)
         return data["choices"][0]["message"]["content"]
 
     def embed(self, text: str, model: str = EMBEDDING_MODEL) -> List[float]:
         """Obtener embedding de un texto."""
-        payload = {
-            "model": model,
-            "input": text,
-        }
-        resp = self.client.post(f"{self.base_url}/embeddings", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+        payload = {"model": model, "input": text}
+        data = self._post("/embeddings", payload)
         return data["data"][0]["embedding"]
 
     def embed_batch(self, texts: List[str], model: str = EMBEDDING_MODEL) -> List[List[float]]:
         """Obtener embeddings de múltiples textos."""
-        payload = {
-            "model": model,
-            "input": texts,
-        }
-        resp = self.client.post(f"{self.base_url}/embeddings", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        # Sort by index to maintain order
+        payload = {"model": model, "input": texts}
+        data = self._post("/embeddings", payload)
         return [d["embedding"] for d in sorted(data["data"], key=lambda x: x["index"])]
 
     def health_check(self) -> bool:
@@ -113,13 +121,38 @@ def load_document(filepath: str) -> str:
 
     elif ext == ".pdf":
         from pypdf import PdfReader
-        reader = PdfReader(filepath)
+        try:
+            reader = PdfReader(filepath)
+        except Exception as e:
+            raise ValueError(f"No se pudo abrir el PDF: {e}")
+
+        # Intentar desencriptar si está protegido
+        if reader.is_encrypted:
+            try:
+                reader.decrypt("")  # Intentar sin contraseña
+            except Exception:
+                raise ValueError(
+                    "El PDF está encriptado y no se puede leer. "
+                    "Prueba con un PDF sin protección."
+                )
+
         text = []
-        for page in reader.pages:
-            t = page.extract_text()
-            if t:
-                text.append(t)
-        return "\n".join(text)
+        for i, page in enumerate(reader.pages):
+            try:
+                t = page.extract_text()
+                if t and t.strip():
+                    text.append(t)
+            except Exception:
+                text.append(f"[Página {i+1}: no se pudo extraer texto]")
+
+        result = "\n".join(text)
+        if not result.strip():
+            raise ValueError(
+                "No se pudo extraer texto del PDF. "
+                "Puede ser un PDF escaneado (imágenes). "
+                "Prueba con un PDF con texto seleccionable."
+            )
+        return result
 
     else:
         raise ValueError(f"Formato no soportado: {ext}")
