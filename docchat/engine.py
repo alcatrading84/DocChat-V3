@@ -27,7 +27,10 @@ CHAT_MODEL = "qwen2.5-coder-3b-instruct"
 CHUNK_SIZE = 300       # Más pequeños = más rápido de procesar
 CHUNK_OVERLAP = 30
 TOP_K = 3               # Menos fragmentos = respuesta más rápida
-DATA_DIR = os.path.expanduser("~/.docchat")
+DATA_DIR = os.path.join(os.path.expanduser("~"), ".docchat")
+# Forzar backslash en Windows
+if os.name == "nt":
+    DATA_DIR = DATA_DIR.replace("/", "\\")
 
 
 # =============================================================================
@@ -211,57 +214,84 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE,
 # =============================================================================
 
 class VectorStore:
-    """Almacén vectorial con escritura diferida (no picos de HDD)."""
+    """Almacén vectorial simple y robusto."""
 
     def __init__(self, db_path: str = None):
-        self.db_path = db_path or os.path.join(DATA_DIR, "store")
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        if db_path:
+            self.db_path = db_path
+        else:
+            self.db_path = os.path.join(DATA_DIR, "docchat_data")
+        os.makedirs(DATA_DIR, exist_ok=True)
 
         self.documents: List[Dict] = []
         self.embeddings: List[np.ndarray] = []
-        self._dirty = False
         self._load()
 
-    def _load(self):
-        """Cargar desde disco (solo cuando es necesario)."""
-        meta_path = self.db_path + "_meta.json"
-        vec_path = self.db_path + "_vec.npy"
+    def _path(self):
+        return self.db_path + ".npz"
 
-        if os.path.exists(meta_path) and os.path.exists(vec_path):
+    def _load(self):
+        path = self._path()
+        if os.path.exists(path):
             try:
-                with open(meta_path, "r", encoding="utf-8") as f:
-                    self.documents = json.load(f)
-                self.embeddings = list(np.load(vec_path))
-                # Si es un solo array 2D, convertir a lista de vectores
-                if self.embeddings and isinstance(self.embeddings[0], np.ndarray) and \
-                   self.embeddings[0].ndim == 1:
-                    pass  # Ya está bien
-                elif self.embeddings and isinstance(self.embeddings, np.ndarray):
-                    self.embeddings = [np.array(v) for v in self.embeddings]
+                data = np.load(path, allow_pickle=True)
+                self.documents = list(data["docs"])
+                self.embeddings = [np.array(v, dtype=np.float32) for v in data["vecs"]]
             except Exception:
                 self.documents = []
                 self.embeddings = []
 
     def save(self):
-        """Guardar a disco (solo si hay cambios)."""
-        if not self._dirty:
+        if not self.documents or not self.embeddings:
             return
-        if not self.documents:
-            return
+        path = self._path()
+        try:
+            arr = np.array(self.embeddings, dtype=np.float32)
+            np.savez(path, docs=self.documents, vecs=arr)
+        except Exception as e:
+            print(f"⚠️ Error al guardar: {e}")
 
-        meta_path = self.db_path + "_meta.json"
-        vec_path = self.db_path + "_vec.npy"
+    def add_one(self, text: str, embedding: List[float], source: str = ""):
+        doc_id = hashlib.md5(text.encode()).hexdigest()[:12]
+        self.documents.append({"id": doc_id, "text": text, "source": source})
+        self.embeddings.append(np.array(embedding, dtype=np.float32))
 
-        # Guardar metadatos como JSON
-        with open(meta_path + ".tmp", "w", encoding="utf-8") as f:
-            json.dump(self.documents, f, ensure_ascii=False)
-        os.replace(meta_path + ".tmp", meta_path)
+    def search(self, query_embedding: List[float], top_k: int = TOP_K) -> List[tuple]:
+        if not self.embeddings:
+            return []
+        query_vec = np.array(query_embedding, dtype=np.float32)
+        q_norm = np.linalg.norm(query_vec)
+        if q_norm > 0:
+            query_vec = query_vec / q_norm
+        emb_array = np.array(self.embeddings, dtype=np.float32)
+        norms = np.linalg.norm(emb_array, axis=1)
+        norms[norms == 0] = 1
+        emb_array = emb_array / norms[:, np.newaxis]
+        scores = np.dot(emb_array, query_vec)
+        indices = np.argsort(scores)[-top_k:][::-1]
+        results = []
+        for idx in indices:
+            doc = self.documents[idx]
+            results.append((doc["text"], doc["source"], float(scores[idx])))
+        return results
 
-        # Guardar vectores como numpy (mucho más rápido que JSON)
-        np.save(vec_path + ".tmp", np.array(self.embeddings))
-        os.replace(vec_path + ".tmp", vec_path)
+    def clear(self):
+        self.documents = []
+        self.embeddings = []
+        path = self._path()
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
 
-        self._dirty = False
+    @property
+    def count(self) -> int:
+        return len(self.documents)
+
+    @property
+    def sources(self) -> List[str]:
+        return list(set(d["source"] for d in self.documents if d["source"]))
 
     def add_one(self, text: str, embedding: List[float], source: str = ""):
         """Agregar un solo texto con su embedding (sin pico de RAM)."""
@@ -304,12 +334,12 @@ class VectorStore:
     def clear(self):
         self.documents = []
         self.embeddings = []
-        self._dirty = True
-        self.save()
-        for ext in ["_meta.json", "_vec.npy"]:
-            p = self.db_path + ext
-            if os.path.exists(p):
-                os.remove(p)
+        path = self._path()
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
 
     @property
     def count(self) -> int:
