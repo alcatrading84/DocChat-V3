@@ -12,6 +12,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QTextCursor
 
 from docchat.engine import DocChatEngine
+from docchat.lang import t
 
 
 # =============================================================================
@@ -72,7 +73,8 @@ class DocChatWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.engine = DocChatEngine()
-        self.setWindowTitle("📄 DocChat — Chat con tus documentos")
+        self.lang = "es"
+        self.setWindowTitle(t("app_name", self.lang))
         self.setMinimumSize(900, 650)
         self.resize(1000, 700)
         self._current_response = ""  # Para streaming
@@ -84,13 +86,13 @@ class DocChatWindow(QMainWindow):
         self.setCentralWidget(central)
         ml = QVBoxLayout()
 
-        # HEADER
-        header = QLabel("📄 DocChat — Asistente Local de Documentos")
-        header.setStyleSheet("""
+        # HEADER (guardar ref para cambiar idioma)
+        self.header = QLabel(t("app_subtitle", self.lang))
+        self.header.setStyleSheet("""
             font-size: 20px; font-weight: bold; padding: 12px;
             background: #1a1a2e; color: #e0e0e0; border-radius: 8px;
         """)
-        ml.addWidget(header)
+        ml.addWidget(self.header)
 
         # SPLITTER
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -99,10 +101,11 @@ class DocChatWindow(QMainWindow):
         dp = QWidget()
         dl = QVBoxLayout()
 
-        dl.addWidget(QLabel("📁 Documentos"))
-        dl.addWidget(QLabel("Arrastra PDF, DOCX o TXT:"))
+        dl.addWidget(QLabel(t("docs_title", self.lang)))
+        self.drop_desc = QLabel(t("drop_desc", self.lang))
+        dl.addWidget(self.drop_desc)
 
-        self.drop_zone = QLabel("🎯 SOLTAR AQUÍ")
+        self.drop_zone = QLabel(t("drop_hint", self.lang))
         self.drop_zone.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.drop_zone.setMinimumHeight(80)
         self.drop_zone.setStyleSheet("""
@@ -131,17 +134,18 @@ class DocChatWindow(QMainWindow):
             QListWidget { background: #0d0d1a; color: #ccc;
                 border: 1px solid #333; border-radius: 4px; }
         """)
-        dl.addWidget(QLabel("Cargados:"))
+        self.doc_label = QLabel(t("loaded", self.lang))
+        dl.addWidget(self.doc_label)
         dl.addWidget(self.doc_list)
 
-        btn_clear = QPushButton("🗑 Limpiar todo")
-        btn_clear.setStyleSheet("""
+        self.btn_clear = QPushButton(t("clear_all", self.lang))
+        self.btn_clear.setStyleSheet("""
             QPushButton { background: #5c2e2e; color: white;
                 border: none; border-radius: 4px; padding: 6px; }
             QPushButton:hover { background: #7a3e3e; }
         """)
-        btn_clear.clicked.connect(self._clear_all)
-        dl.addWidget(btn_clear)
+        self.btn_clear.clicked.connect(self._clear_all)
+        dl.addWidget(self.btn_clear)
 
         dp.setLayout(dl)
         splitter.addWidget(dp)
@@ -150,11 +154,11 @@ class DocChatWindow(QMainWindow):
         cp = QWidget()
         cl = QVBoxLayout()
 
-        # Selector de modelo + RAG toggle
+        # Selector de modelo + RAG toggle + Idioma
         tr = QHBoxLayout()
-        tr.addWidget(QLabel("🧠 Modelo:"))
+        tr.addWidget(QLabel("🧠:"))
         self.model_sel = QComboBox()
-        self.model_sel.setMinimumWidth(220)
+        self.model_sel.setMinimumWidth(180)
         self.model_sel.setStyleSheet("""
             QComboBox { background: #1a1a2e; color: #e0e0e0;
                 border: 1px solid #333; border-radius: 4px; padding: 4px; }
@@ -162,7 +166,7 @@ class DocChatWindow(QMainWindow):
         tr.addWidget(self.model_sel)
 
         self.btn_refresh = QPushButton("🔄")
-        self.btn_refresh.setFixedWidth(36)
+        self.btn_refresh.setFixedWidth(30)
         self.btn_refresh.clicked.connect(self._refresh_models)
         tr.addWidget(self.btn_refresh)
 
@@ -171,11 +175,24 @@ class DocChatWindow(QMainWindow):
         self.rag_btn.setChecked(True)
         self.rag_btn.setStyleSheet("""
             QPushButton { background: #0d7377; color: white;
-                border: none; border-radius: 4px; padding: 4px 10px; }
+                border: none; border-radius: 4px; padding: 4px 8px; }
             QPushButton:checked { background: #2d5c2e; }
         """)
         self.rag_btn.clicked.connect(self._toggle_rag)
         tr.addWidget(self.rag_btn)
+
+        # Selector de idioma
+        self.lang_sel = QComboBox()
+        self.lang_sel.addItem("🇪🇸 ES", "es")
+        self.lang_sel.addItem("🇬🇧 EN", "en")
+        self.lang_sel.setFixedWidth(70)
+        self.lang_sel.setStyleSheet("""
+            QComboBox { background: #1a1a2e; color: #e0e0e0;
+                border: 1px solid #333; border-radius: 4px; padding: 2px; }
+        """)
+        self.lang_sel.currentIndexChanged.connect(self._change_lang)
+        tr.addWidget(self.lang_sel)
+
         tr.addStretch()
         cl.addLayout(tr)
 
@@ -235,13 +252,7 @@ class DocChatWindow(QMainWindow):
         central.setLayout(ml)
 
         # Bienvenida
-        self._msg("system",
-            "📄 **DocChat** — Asistente Local de Documentos\n\n"
-            "1️⃣ Arrastra un PDF, Word o TXT al panel izquierdo\n"
-            "2️⃣ Escribe preguntas sobre su contenido\n"
-            "3️⃣ Las respuestas aparecen **en tiempo real**\n\n"
-            "✅ 100% local · Sin API keys · Sin internet"
-        )
+        self._msg("system", t("welcome", self.lang))
 
     def _on_drop(self, event):
         for url in event.mimeData().urls():
@@ -250,16 +261,17 @@ class DocChatWindow(QMainWindow):
                 self._load_doc(fp)
 
     def _browse(self, event=None):
+        title = "Seleccionar documentos" if self.lang == "es" else "Select documents"
         files, _ = QFileDialog.getOpenFileNames(
-            self, "Seleccionar documentos", "",
-            "Documentos (*.pdf *.docx *.txt);;Todos (*)")
+            self, title, "",
+            "Documentos (*.pdf *.docx *.txt);;All files (*.*)")
         for f in files:
             self._load_doc(f)
 
     def _load_doc(self, filepath):
         if not os.path.exists(filepath):
             return
-        self.progress_label.setText(f"⏳ Procesando {os.path.basename(filepath)}...")
+        self.progress_label.setText(t("loading", self.lang).format(os.path.basename(filepath)))
         self.btn_send.setEnabled(False)
         self._worker = DocLoadWorker(self.engine, filepath)
         self._worker.progress.connect(self._on_progress)
@@ -270,7 +282,7 @@ class DocChatWindow(QMainWindow):
         self._worker.start()
 
     def _on_progress(self, actual, total, msg):
-        self.progress_label.setText(f"⏳ {msg}")
+        self.progress_label.setText(f"⏳ {t('progress', self.lang).format(actual, total)}")
 
     def _on_doc_done(self, result):
         self.btn_send.setEnabled(True)
@@ -278,18 +290,19 @@ class DocChatWindow(QMainWindow):
         try:
             if result and result.get("status") == "ok":
                 self.doc_list.addItem(
-                    QListWidgetItem(f"✅ {result['filename']} ({result['chunks']} frags)")
+                    QListWidgetItem(f"✅ {result['filename']} ({result['chunks']} {t('frags', self.lang)})")
                 )
                 self._msg("system",
-                    f"✅ **{result['filename']}** cargado.\n"
-                    f"{result['chunks']} fragmentos · {result['total_chars']:,} caracteres"
+                    t("loaded_ok", self.lang).format(
+                        result['filename'], result['chunks'], result['total_chars']
+                    )
                 )
                 self.sb.showMessage(f"✅ {result['filename']}", 3000)
             else:
-                msg = result.get("message", "Error desconocido") if result else "Error al procesar"
+                msg = result.get("message", t("error_unknown", self.lang)) if result else t("error_unknown", self.lang)
                 self._msg("error", msg)
         except Exception as e:
-            self._msg("error", f"Error al mostrar resultado: {e}")
+            self._msg("error", t("error_display", self.lang).format(e))
         self._update_stats()
 
     def _on_doc_error(self, error):
@@ -297,11 +310,11 @@ class DocChatWindow(QMainWindow):
         self.progress_label.setText("")
         friendly = str(error)
         if "encrypted" in error.lower() or "decrypt" in error.lower():
-            friendly = "PDF protegido. Guárdalo sin contraseña e intenta de nuevo."
+            friendly = t("error_pdf_encrypted", self.lang)
         elif "timeout" in error.lower():
-            friendly = "LM Studio tardó. Verifica que el modelo de embeddings esté cargado."
+            friendly = t("error_timeout", self.lang)
         self._msg("error", friendly)
-        self.sb.showMessage("❌ Error", 5000)
+        self.sb.showMessage(t("status_error", self.lang), 5000)
 
     def _send(self):
         q = self.input.text().strip()
@@ -314,7 +327,7 @@ class DocChatWindow(QMainWindow):
 
         # Preparar para streaming
         self._current_response = ""
-        self.typing_label.setText("🤖 Escribiendo...")
+        self.typing_label.setText(t("typing", self.lang))
 
         uc = self.rag_btn.isChecked()
         self._stream_worker = StreamWorker(self.engine, q, uc)
@@ -341,63 +354,78 @@ class DocChatWindow(QMainWindow):
         self.input.setEnabled(True)
         self.input.setFocus()
         self.typing_label.setText("")
-        self.sb.showMessage("✅ Listo", 2000)
+        self.sb.showMessage(t("status_ok", self.lang), 2000)
 
     def _on_response_error(self, error):
         friendly = str(error)
         if "timeout" in error.lower():
-            friendly = "LM Studio tardó. Verifica que el modelo esté cargado y prueba de nuevo."
+            friendly = t("error_timeout", self.lang)
         self._msg("error", friendly)
         self.btn_send.setEnabled(True)
         self.input.setEnabled(True)
-        self.sb.showMessage("❌ Error", 5000)
+        self.sb.showMessage(t("status_error", self.lang), 5000)
 
     def _clear_all(self):
-        r = QMessageBox.question(self, "Limpiar todo",
-            "¿Eliminar todos los documentos?",
+        r = QMessageBox.question(self,
+            t("clear_all", self.lang), t("clear_confirm", self.lang),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if r == QMessageBox.StandardButton.Yes:
             self.engine.clear()
             self.doc_list.clear()
-            self._msg("system", "🗑 Documentos eliminados")
+            self._msg("system", t("clear_done", self.lang))
             self._update_stats()
+
+    def _change_lang(self, idx):
+        """Cambiar idioma de la interfaz."""
+        self.lang = self.lang_sel.currentData()
+        self.setWindowTitle(t("app_name", self.lang))
+        self.header.setText(t("app_subtitle", self.lang))
+        self.drop_zone.setText(t("drop_hint", self.lang))
+        self.btn_clear.setText(t("clear_all", self.lang))
+        self.doc_label.setText(t("loaded", self.lang))
+        self._toggle_rag()
+        self._check_status()
 
     def _toggle_rag(self):
         if self.rag_btn.isChecked():
-            self.rag_btn.setText("📄 RAG ON")
-            self.input.setPlaceholderText("Pregunta sobre los documentos...")
+            self.rag_btn.setText(t("rag_on", self.lang))
+            self.input.setPlaceholderText(t("prompt_rag", self.lang))
         else:
-            self.rag_btn.setText("💬 CHAT")
-            self.input.setPlaceholderText("Chatea con la IA local...")
+            self.rag_btn.setText(t("chat_mode", self.lang))
+            self.input.setPlaceholderText(t("prompt_chat", self.lang))
 
     def _refresh_models(self):
         models = self.engine.available_models()
         self.model_sel.clear()
         for m in models:
             self.model_sel.addItem(m)
-        self.sb.showMessage(f"🔄 {len(models)} modelos", 3000)
+        self.sb.showMessage(t("models_updated", self.lang).format(len(models)), 3000)
 
     def _check_status(self):
         if self.engine.is_available():
-            self.lm_status.setText("🟢 LM Studio")
+            self.lm_status.setText(t("connected", self.lang))
             self.lm_status.setStyleSheet("color: #69db7c;")
             self._refresh_models()
         else:
-            self.lm_status.setText("🔴 LM Studio NO disponible")
+            self.lm_status.setText(t("disconnected", self.lang))
             self.lm_status.setStyleSheet("color: #ff6b6b;")
-            # Reintentar
             QTimer.singleShot(10000, self._check_status)
 
     def _update_stats(self):
         s = self.engine.get_stats()
-        self.doc_count.setText(f"📄 {s['documents']}")
+        self.doc_count.setText(t("docs_count", self.lang).format(s['documents']))
 
     def _msg(self, role, text):
         colors = {"system": "#888", "user": "#4fc3f7",
                   "assistant": "#81c784", "error": "#ef5350"}
         color = colors.get(role, "#fff")
-        prefix = {"user": "🧑 Tú", "assistant": "🤖 DocChat",
-                  "system": "", "error": "❌"}.get(role, "🤖")
+        prefix_map = {
+            "user": t("user_prefix", self.lang),
+            "assistant": t("ai_prefix", self.lang),
+            "system": t("system", self.lang),
+            "error": t("error_prefix", self.lang),
+        }
+        prefix = prefix_map.get(role, t("ai_prefix", self.lang))
 
         if role == "system":
             html = f'<p style="color:{color};">{text}</p>'
