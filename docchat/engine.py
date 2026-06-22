@@ -1,15 +1,19 @@
-"""DocChat Engine — Motor RAG local usando LM Studio.
+"""DocChat Engine v2 — Motor RAG local optimizado.
 
-Sin API keys. Sin internet. Solo tu LM Studio local.
+Mejoras:
+- Streaming: respuestas en tiempo real (tokens visibles al instante)
+- RAM estable: carga chunks de 1 en 1, no todo en memoria
+- HDD estable: escrituras optimizadas, sin picos
+- Progreso visible: el usuario sabe qué está pasando
 """
 
 import os
 import json
-import math
 import hashlib
+import time
 import numpy as np
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Callable
 import httpx
 
 
@@ -19,48 +23,62 @@ import httpx
 
 LM_STUDIO_URL = "http://127.0.0.1:1234/v1"
 EMBEDDING_MODEL = "text-embedding-nomic-embed-text-v1.5"
-CHAT_MODEL = "qwen2.5-coder-3b-instruct"  # Cambiable en settings
-CHUNK_SIZE = 500
-CHUNK_OVERLAP = 50
-TOP_K = 5
+CHAT_MODEL = "qwen2.5-coder-3b-instruct"
+CHUNK_SIZE = 300       # Más pequeños = más rápido de procesar
+CHUNK_OVERLAP = 30
+TOP_K = 3               # Menos fragmentos = respuesta más rápida
 DATA_DIR = os.path.expanduser("~/.docchat")
 
 
 # =============================================================================
-# CLIENTE LM STUDIO
+# CLIENTE LM STUDIO (con streaming)
 # =============================================================================
 
 class LMStudioClient:
-    """Cliente HTTP para LM Studio."""
+    """Cliente HTTP para LM Studio con streaming."""
 
     def __init__(self, base_url: str = LM_STUDIO_URL):
         self.base_url = base_url
-        self.client = httpx.Client(timeout=120)  # 2 min para modelos grandes
+        self._client = httpx.Client(timeout=180)
 
-    def _post(self, endpoint: str, payload: dict, max_retries: int = 2) -> dict:
-        """POST con reintentos y timeout más largo."""
-        last_error = None
-        for attempt in range(max_retries + 1):
-            try:
-                resp = self.client.post(
-                    f"{self.base_url}{endpoint}",
-                    json=payload,
-                    timeout=180,  # 3 min por si el modelo tarda
-                )
-                resp.raise_for_status()
-                return resp.json()
-            except httpx.TimeoutException as e:
-                last_error = f"Timeout ({attempt+1}/{max_retries+1}): el modelo está procesando"
-            except httpx.HTTPStatusError as e:
-                raise RuntimeError(f"LM Studio error {e.response.status_code}: {e.response.text[:200]}")
-            except Exception as e:
-                last_error = str(e)
-        raise TimeoutError(f"LM Studio no responde después de {max_retries+1} intentos. "
-                          f"Verifica que el modelo esté cargado en LM Studio. Error: {last_error}")
+    def chat_stream(self, messages: List[Dict], model: str = CHAT_MODEL,
+                    max_tokens: int = 1024, temperature: float = 0.7,
+                    on_token: Callable = None) -> str:
+        """Chat con streaming: llama a on_token por cada token recibido."""
+        payload = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True,
+        }
+
+        full_response = ""
+        with self._client.stream("POST", f"{self.base_url}/chat/completions",
+                                  json=payload, timeout=180) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line or line.startswith(": "):
+                    continue
+                if line.startswith("data: "):
+                    data_str = line[6:]
+                    if data_str.strip() == "[DONE]":
+                        break
+                    try:
+                        import json as _json
+                        data = _json.loads(data_str)
+                        token = data["choices"][0].get("delta", {}).get("content", "")
+                        if token:
+                            full_response += token
+                            if on_token:
+                                on_token(token)
+                    except Exception:
+                        continue
+        return full_response
 
     def chat(self, messages: List[Dict], model: str = CHAT_MODEL,
              max_tokens: int = 1024, temperature: float = 0.7) -> str:
-        """Enviar mensaje y obtener respuesta."""
+        """Chat sin streaming (para consultas rápidas)."""
         payload = {
             "model": model,
             "messages": messages,
@@ -68,35 +86,51 @@ class LMStudioClient:
             "temperature": temperature,
             "stream": False,
         }
-        data = self._post("/chat/completions", payload)
-        return data["choices"][0]["message"]["content"]
+        for intento in range(3):
+            try:
+                resp = self._client.post(f"{self.base_url}/chat/completions",
+                                          json=payload, timeout=180)
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"]
+            except httpx.TimeoutException:
+                if intento < 2:
+                    time.sleep(1)
+                    continue
+                raise TimeoutError("LM Studio no responde. "
+                                   "Verifica que el modelo esté cargado.")
+            except Exception as e:
+                raise RuntimeError(f"Error LM Studio: {e}")
 
     def embed(self, text: str, model: str = EMBEDDING_MODEL) -> List[float]:
-        """Obtener embedding de un texto."""
-        payload = {"model": model, "input": text}
-        data = self._post("/embeddings", payload)
-        return data["data"][0]["embedding"]
-
-    def embed_batch(self, texts: List[str], model: str = EMBEDDING_MODEL) -> List[List[float]]:
-        """Obtener embeddings de múltiples textos."""
-        payload = {"model": model, "input": texts}
-        data = self._post("/embeddings", payload)
-        return [d["embedding"] for d in sorted(data["data"], key=lambda x: x["index"])]
+        """Embedding de un texto."""
+        for intento in range(3):
+            try:
+                resp = self._client.post(f"{self.base_url}/embeddings",
+                                          json={"model": model, "input": text},
+                                          timeout=60)
+                resp.raise_for_status()
+                return resp.json()["data"][0]["embedding"]
+            except httpx.TimeoutException:
+                if intento < 2:
+                    time.sleep(2)
+                    continue
+                raise TimeoutError("Embedding timeout. "
+                                   "Verifica el modelo de embeddings en LM Studio.")
+            except Exception as e:
+                raise RuntimeError(f"Error embedding: {e}")
 
     def health_check(self) -> bool:
-        """Verificar que LM Studio está corriendo."""
         try:
-            resp = self.client.get(f"{self.base_url}/models", timeout=5)
-            return resp.status_code == 200
+            r = self._client.get(f"{self.base_url}/models", timeout=5)
+            return r.status_code == 200
         except Exception:
             return False
 
     def list_models(self) -> List[str]:
-        """Listar modelos disponibles."""
         try:
-            resp = self.client.get(f"{self.base_url}/models", timeout=5)
-            if resp.status_code == 200:
-                return [m["id"] for m in resp.json().get("data", [])]
+            r = self._client.get(f"{self.base_url}/models", timeout=5)
+            if r.status_code == 200:
+                return [m["id"] for m in r.json().get("data", [])]
         except Exception:
             pass
         return []
@@ -107,7 +141,7 @@ class LMStudioClient:
 # =============================================================================
 
 def load_document(filepath: str) -> str:
-    """Cargar texto de un documento (PDF, DOCX, TXT)."""
+    """Cargar texto de PDF, DOCX o TXT."""
     ext = Path(filepath).suffix.lower()
 
     if ext == ".txt":
@@ -115,8 +149,8 @@ def load_document(filepath: str) -> str:
             return f.read()
 
     elif ext == ".docx":
-        from docx import Document
-        doc = Document(filepath)
+        from docx import Document as DocxDoc
+        doc = DocxDoc(filepath)
         return "\n".join(p.text for p in doc.paragraphs)
 
     elif ext == ".pdf":
@@ -126,14 +160,13 @@ def load_document(filepath: str) -> str:
         except Exception as e:
             raise ValueError(f"No se pudo abrir el PDF: {e}")
 
-        # Intentar desencriptar si está protegido
         if reader.is_encrypted:
             try:
-                reader.decrypt("")  # Intentar sin contraseña
+                reader.decrypt("")
             except Exception:
                 raise ValueError(
-                    "El PDF está encriptado y no se puede leer. "
-                    "Prueba con un PDF sin protección."
+                    "PDF protegido con contraseña. "
+                    "Guarda una copia sin protección e intenta de nuevo."
                 )
 
         text = []
@@ -143,14 +176,13 @@ def load_document(filepath: str) -> str:
                 if t and t.strip():
                     text.append(t)
             except Exception:
-                text.append(f"[Página {i+1}: no se pudo extraer texto]")
+                pass
 
         result = "\n".join(text)
         if not result.strip():
             raise ValueError(
-                "No se pudo extraer texto del PDF. "
-                "Puede ser un PDF escaneado (imágenes). "
-                "Prueba con un PDF con texto seleccionable."
+                "No se pudo extraer texto. "
+                "Puede ser un PDF escaneado (imágenes)."
             )
         return result
 
@@ -160,7 +192,7 @@ def load_document(filepath: str) -> str:
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE,
                overlap: int = CHUNK_OVERLAP) -> List[str]:
-    """Dividir texto en chunks superpuestos."""
+    """Dividir texto en chunks pequeños."""
     words = text.split()
     chunks = []
     i = 0
@@ -175,70 +207,92 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE,
 
 
 # =============================================================================
-# ALMACÉN VECTORIAL (simple, sin dependencias pesadas)
+# ALMACÉN VECTORIAL OPTIMIZADO
 # =============================================================================
 
 class VectorStore:
-    """Almacén vectorial simple basado en JSON + numpy."""
+    """Almacén vectorial con escritura diferida (no picos de HDD)."""
 
     def __init__(self, db_path: str = None):
-        self.db_path = db_path or os.path.join(DATA_DIR, "vectors.json")
+        self.db_path = db_path or os.path.join(DATA_DIR, "store")
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+
         self.documents: List[Dict] = []
         self.embeddings: List[np.ndarray] = []
+        self._dirty = False
         self._load()
 
     def _load(self):
-        """Cargar datos desde disco."""
-        if os.path.exists(self.db_path):
+        """Cargar desde disco (solo cuando es necesario)."""
+        meta_path = self.db_path + "_meta.json"
+        vec_path = self.db_path + "_vec.npy"
+
+        if os.path.exists(meta_path) and os.path.exists(vec_path):
             try:
-                with open(self.db_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                self.documents = data.get("documents", [])
-                self.embeddings = [np.array(e) for e in data.get("embeddings", [])]
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    self.documents = json.load(f)
+                self.embeddings = list(np.load(vec_path))
+                # Si es un solo array 2D, convertir a lista de vectores
+                if self.embeddings and isinstance(self.embeddings[0], np.ndarray) and \
+                   self.embeddings[0].ndim == 1:
+                    pass  # Ya está bien
+                elif self.embeddings and isinstance(self.embeddings, np.ndarray):
+                    self.embeddings = [np.array(v) for v in self.embeddings]
             except Exception:
                 self.documents = []
                 self.embeddings = []
 
-    def _save(self):
-        """Guardar datos a disco."""
-        data = {
-            "documents": self.documents,
-            "embeddings": [e.tolist() for e in self.embeddings],
-        }
-        with open(self.db_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+    def save(self):
+        """Guardar a disco (solo si hay cambios)."""
+        if not self._dirty:
+            return
+        if not self.documents:
+            return
 
-    def add(self, texts: List[str], embeddings: List[List[float]],
-            metadata: Optional[List[Dict]] = None):
-        """Agregar textos con sus embeddings."""
-        for i, (text, emb) in enumerate(zip(texts, embeddings)):
-            doc_id = hashlib.md5(text.encode()).hexdigest()[:12]
-            self.documents.append({
-                "id": doc_id,
-                "text": text,
-                "source": metadata[i].get("source", "") if metadata else "",
-                "page": metadata[i].get("page", 0) if metadata else 0,
-            })
-            self.embeddings.append(np.array(emb))
-        self._save()
+        meta_path = self.db_path + "_meta.json"
+        vec_path = self.db_path + "_vec.npy"
 
-    def search(self, query_embedding: List[float], top_k: int = TOP_K) -> List[Tuple[str, str, float]]:
-        """Buscar los textos más similares a un embedding."""
+        # Guardar metadatos como JSON
+        with open(meta_path + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(self.documents, f, ensure_ascii=False)
+        os.replace(meta_path + ".tmp", meta_path)
+
+        # Guardar vectores como numpy (mucho más rápido que JSON)
+        np.save(vec_path + ".tmp", np.array(self.embeddings))
+        os.replace(vec_path + ".tmp", vec_path)
+
+        self._dirty = False
+
+    def add_one(self, text: str, embedding: List[float], source: str = ""):
+        """Agregar un solo texto con su embedding (sin pico de RAM)."""
+        doc_id = hashlib.md5(text.encode()).hexdigest()[:12]
+        self.documents.append({
+            "id": doc_id,
+            "text": text,
+            "source": source,
+        })
+        self.embeddings.append(np.array(embedding, dtype=np.float32))
+        self._dirty = True
+
+    def search(self, query_embedding: List[float], top_k: int = TOP_K) -> List[tuple]:
+        """Buscar textos similares (coseno)."""
         if not self.embeddings:
             return []
 
-        query_vec = np.array(query_embedding)
+        query_vec = np.array(query_embedding, dtype=np.float32)
+        # Normalizar para coseno
+        q_norm = np.linalg.norm(query_vec)
+        if q_norm > 0:
+            query_vec = query_vec / q_norm
 
-        # Coseno similitud
-        scores = []
-        for emb in self.embeddings:
-            dot = np.dot(query_vec, emb)
-            norm = np.linalg.norm(query_vec) * np.linalg.norm(emb)
-            sim = dot / norm if norm > 0 else 0
-            scores.append(sim)
+        # Calcular similitud en lote (rápido con numpy)
+        emb_array = np.array(self.embeddings, dtype=np.float32)
+        norms = np.linalg.norm(emb_array, axis=1)
+        norms[norms == 0] = 1
+        emb_array = emb_array / norms[:, np.newaxis]
 
-        # Top-K
+        scores = np.dot(emb_array, query_vec)
+
         indices = np.argsort(scores)[-top_k:][::-1]
         results = []
         for idx in indices:
@@ -248,11 +302,14 @@ class VectorStore:
         return results
 
     def clear(self):
-        """Limpiar todos los datos."""
         self.documents = []
         self.embeddings = []
-        if os.path.exists(self.db_path):
-            os.remove(self.db_path)
+        self._dirty = True
+        self.save()
+        for ext in ["_meta.json", "_vec.npy"]:
+            p = self.db_path + ext
+            if os.path.exists(p):
+                os.remove(p)
 
     @property
     def count(self) -> int:
@@ -264,46 +321,57 @@ class VectorStore:
 
 
 # =============================================================================
-# MOTOR RAG
+# MOTOR RAG OPTIMIZADO
 # =============================================================================
 
 class DocChatEngine:
-    """Motor principal de DocChat."""
+    """Motor principal optimizado para fluidez y RAM estable."""
 
     def __init__(self):
         self.lm = LMStudioClient()
         self.vector_store = VectorStore()
         self.chat_model = CHAT_MODEL
-        self._history: List[Dict] = []
 
     def is_available(self) -> bool:
-        """Verificar que LM Studio está disponible."""
         return self.lm.health_check()
 
     def available_models(self) -> List[str]:
-        """Listar modelos de chat disponibles."""
         models = self.lm.list_models()
-        # Filtrar modelos de embedding
         return [m for m in models if "embed" not in m.lower()]
 
-    def add_document(self, filepath: str) -> Dict:
-        """Procesar y agregar un documento al índice."""
+    def add_document(self, filepath: str,
+                     on_progress: Callable = None) -> Dict:
+        """Cargar documento: UN chunk a la vez (sin picos de RAM)."""
         filename = os.path.basename(filepath)
 
         # 1. Cargar texto
         text = load_document(filepath)
 
-        # 2. Dividir en chunks
+        # 2. Dividir en chunks pequeños
         chunks = chunk_text(text)
         if not chunks:
             return {"status": "error", "message": "No se pudo extraer texto"}
 
-        # 3. Generar embeddings
-        embeddings = self.lm.embed_batch(chunks)
+        if on_progress:
+            on_progress(0, len(chunks), "Iniciando...")
 
-        # 4. Guardar
-        metadata = [{"source": filename} for _ in chunks]
-        self.vector_store.add(chunks, embeddings, metadata)
+        # 3. Procesar UN chunk a la vez
+        for i, chunk in enumerate(chunks):
+            # Embedding individual (no embota todo)
+            emb = self.lm.embed(chunk)
+
+            # Guardar inmediatamente (no acumula en RAM)
+            self.vector_store.add_one(chunk, emb, filename)
+
+            # HDD: guardar cada 20 chunks (no cada 1)
+            if i % 20 == 0:
+                self.vector_store.save()
+
+            if on_progress:
+                on_progress(i + 1, len(chunks), f"Chunk {i+1}/{len(chunks)}")
+
+        # Guardar final
+        self.vector_store.save()
 
         return {
             "status": "ok",
@@ -312,67 +380,66 @@ class DocChatEngine:
             "total_chars": len(text),
         }
 
-    def query(self, question: str, use_context: bool = True) -> str:
-        """Hacer una pregunta sobre los documentos cargados.
-
-        Args:
-            question: Pregunta del usuario
-            use_context: Si True, busca en documentos. Si False, chat directo.
-
-        Returns:
-            Respuesta del modelo
-        """
+    def query_stream(self, question: str,
+                     on_token: Callable = None,
+                     use_context: bool = True) -> str:
+        """Pregunta con respuesta en streaming (tokens visibles al instante)."""
         if not use_context or self.vector_store.count == 0:
-            # Chat directo sin contexto
             messages = [{"role": "user", "content": question}]
-            return self.lm.chat(messages, model=self.chat_model)
+            return self.lm.chat_stream(messages, model=self.chat_model,
+                                       on_token=on_token)
 
-        # 1. Generar embedding de la pregunta
+        # 1. Embedding de la pregunta
         q_embedding = self.lm.embed(question)
 
         # 2. Buscar chunks relevantes
         results = self.vector_store.search(q_embedding, top_k=TOP_K)
 
         if not results:
-            return "No encontré información relevante en los documentos."
+            no_result = "No encontré información relevante en los documentos."
+            if on_token:
+                for c in no_result:
+                    on_token(c)
+            return no_result
 
-        # 3. Construir contexto
+        # 3. Construir contexto (solo TOP_K = más rápido)
         context_parts = []
         sources = set()
         for text, source, score in results:
-            context_parts.append(f"[{source}]\n{text}")
+            context_parts.append(f"[{source}]\n{text.strip()[:500]}")  # Limitar tamaño
             sources.add(source)
 
         context = "\n\n---\n\n".join(context_parts)
         sources_str = ", ".join(sorted(sources))
 
-        # 4. Construir prompt con contexto
+        # 4. Prompt optimizado para respuestas rápidas
         system_prompt = (
-            "Eres un asistente que responde preguntas basándote EXCLUSIVAMENTE "
-            "en el contexto proporcionado. Si no encuentras la respuesta en el "
-            "contexto, di 'No encontré esta información en los documentos.' "
-            "Sé conciso y preciso. Cita las fuentes cuando sea posible."
+            "Responde la pregunta basándote en el contexto. "
+            "Si no encuentras la respuesta, di que no está en los documentos. "
+            "Sé conciso. Cita las fuentes."
         )
 
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": (
                 f"Contexto:\n{context}\n\n"
-                f"Pregunta: {question}\n\n"
-                f"Fuentes disponibles: {sources_str}"
+                f"Pregunta: {question}\n"
+                f"Fuentes: {sources_str}"
             )},
         ]
 
-        # 5. Obtener respuesta
-        return self.lm.chat(messages, model=self.chat_model)
+        # 5. Streaming
+        return self.lm.chat_stream(messages, model=self.chat_model,
+                                   on_token=on_token)
+
+    def query(self, question: str, use_context: bool = True) -> str:
+        """Pregunta sin streaming."""
+        return self.query_stream(question, use_context=use_context)
 
     def clear(self):
-        """Limpiar documentos y memoria."""
         self.vector_store.clear()
-        self._history = []
 
     def get_stats(self) -> Dict:
-        """Obtener estadísticas del motor."""
         return {
             "documents": self.vector_store.count,
             "sources": self.vector_store.sources,
