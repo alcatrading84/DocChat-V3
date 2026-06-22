@@ -9,7 +9,7 @@ a = Analysis(
     ['run.py'],
     pathex=[],
     binaries=[],
-    datas=[('docchat_icon.png', '.')],
+    datas=[('favicon.ico', '.')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -39,5 +39,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['docchat_icon.ico'],
+    icon=['favicon.ico'],
 )

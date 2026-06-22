@@ -418,10 +418,16 @@ def main():
     
     # Icono de la aplicación
     import os
-    icon_path = os.path.join(os.path.dirname(__file__), "..", "docchat_icon.png")
-    if os.path.exists(icon_path):
-        from PyQt6.QtGui import QIcon, QPixmap
-        app.setWindowIcon(QIcon(icon_path))
+    icon_paths = [
+        os.path.join(os.path.dirname(__file__), "..", "favicon.ico"),
+        os.path.join(os.path.dirname(__file__), "..", "docchat_icon.png"),
+    ]
+    for icon_path in icon_paths:
+        if os.path.exists(icon_path):
+            from PyQt6.QtGui import QIcon
+            icon = QIcon(icon_path)
+            app.setWindowIcon(icon)
+            break
     
     app.setStyleSheet("""
         QMainWindow { background: #12121a; }
