@@ -1,11 +1,42 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
-~/.docchat/
-.env
-venv/
+*.pyd
+*.egg-info/
+
+# Virtual env
 .venv/
+venv/
+build_venv/
+
+# DocChat data
+~/.docchat/
+.docchat/
+
+# Build
 build/
 dist/
-*.spec
 *.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+*.env.local
+
+# Logs
+*.log
+logs/
+
+# Generated docs
+*.docx
+generate_docs.py
+
+# OS
+Thumbs.db
+.DS_Store

@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
-"""DocChat — Lanzador con protección contra cierres inesperados.
+"""DocChat v3 — Lanzador con todas las mejoras.
 
 USO:
-  python run.py          # Modo normal
-  python run.py --debug  # Muestra errores en consola
+  python run.py              # Modo normal (UI escritorio)
+  python run.py --web        # Abrir Web UI directamente
+  python run.py --debug      # Modo debug (consola detallada)
+  python run.py --report     # Mostrar reporte de métricas
+  python run.py --update     # Buscar actualizaciones
 """
 
 import sys
 import os
 import traceback
+import argparse
 
 # Añadir directorio raíz al path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Manejador global de errores no capturados
+
+# =============================================================================
+# MANEJADOR GLOBAL DE ERRORES
+# =============================================================================
+
 def global_exception_handler(exctype, value, tb):
-    """Captura cualquier error no manejado y muestra un mensaje."""
+    """Captura cualquier error no manejado."""
     error_msg = "".join(traceback.format_exception(exctype, value, tb))
-    # Intentar mostrar con QMessageBox si es posible
     try:
         from PyQt6.QtWidgets import QMessageBox
         msg = QMessageBox()
@@ -27,50 +34,155 @@ def global_exception_handler(exctype, value, tb):
         msg.setDetailedText(error_msg)
         msg.exec()
     except Exception:
-        # Si no podemos mostrar Qt, imprimir a consola
         print(f"\n❌ ERROR INESPERADO:\n{error_msg}", file=sys.stderr)
-    
-    # Llamar al manejador original
     sys.__excepthook__(exctype, value, tb)
 
 sys.excepthook = global_exception_handler
 
-# Verificar dependencias
-missing = []
-for mod, name in [('PyQt6.QtWidgets', 'PyQt6'), ('httpx', 'httpx'), ('numpy', 'numpy')]:
-    try:
-        __import__(mod.split('.')[0])
-    except ImportError:
-        missing.append(name)
 
-if missing:
-    print(f"\n❌ Faltan dependencias: {', '.join(missing)}")
-    print(f"   Para instalarlas:")
-    print(f"   pip install {' '.join(missing)}")
-    input("\nPresiona Enter para salir...")
-    sys.exit(1)
+# =============================================================================
+# VERIFICACIÓN DE DEPENDENCIAS
+# =============================================================================
 
-# Verificar LM Studio
-try:
-    import httpx
-    r = httpx.get("http://127.0.0.1:1234/v1/models", timeout=3)
-    if r.status_code == 200:
-        models = [m["id"] for m in r.json().get("data", [])]
-        print(f"✅ LM Studio conectado. Modelos:")
-        for m in models:
+def check_dependencies():
+    """Verificar que las dependencias principales estén instaladas."""
+    required = [
+        ('PyQt6.QtWidgets', 'PyQt6'),
+        ('httpx', 'httpx'),
+        ('pypdf', 'pypdf'),
+    ]
+    optional = [
+        ('llama_cpp', 'llama-cpp-python'),
+        ('pytesseract', 'pytesseract'),
+        ('flask', 'flask'),
+        ('openpyxl', 'openpyxl'),
+        ('pptx', 'python-pptx'),
+    ]
+
+    missing = []
+    for mod, name in required:
+        try:
+            __import__(mod.split('.')[0])
+        except ImportError:
+            missing.append(name)
+
+    if missing:
+        print(f"\n❌ Faltan dependencias obligatorias: {', '.join(missing)}")
+        print(f"   pip install {' '.join(missing)}")
+        input("\nPresiona Enter para salir...")
+        sys.exit(1)
+
+    # Opcionales: solo informar
+    missing_opt = []
+    for mod, name in optional:
+        try:
+            __import__(mod.split('.')[0])
+        except ImportError:
+            missing_opt.append(name)
+
+    if missing_opt:
+        print(f"\nℹ️  Dependencias opcionales no instaladas:")
+        for m in missing_opt:
             print(f"   • {m}")
-    else:
-        print("⚠️  LM Studio responde con código inesperado")
-except Exception:
-    print("⚠️  LM Studio no está corriendo en localhost:1234")
-    print("   Abre LM Studio, carga un modelo y activa el servidor.\n")
+        print(f"   pip install {' '.join(missing_opt)}")
+        print("   (DocChat funcionará sin ellas, pero con menos funciones)\n")
 
-# Lanzar la app con protección
-try:
-    from docchat.ui import main
+
+# =============================================================================
+# CLI ARGUMENTS
+# =============================================================================
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="📄 DocChat v3 — Asistente Local de Documentos"
+    )
+    parser.add_argument("--web", action="store_true",
+                        help="Iniciar Web UI directamente")
+    parser.add_argument("--debug", action="store_true",
+                        help="Modo debug (consola detallada)")
+    parser.add_argument("--report", action="store_true",
+                        help="Mostrar reporte de métricas")
+    parser.add_argument("--update", action="store_true",
+                        help="Buscar actualizaciones")
+    parser.add_argument("--mode", type=str, choices=["auto", "offline", "online"],
+                        default="auto", help="Modo de inferencia")
+    return parser.parse_args()
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
+def main():
+    args = parse_args()
+
+    # Configurar logging
+    if args.debug:
+        logging_level = logging.DEBUG
+    else:
+        logging_level = logging.INFO
+
+    logging.basicConfig(
+        level=logging_level,
+        format="[%(asctime)s] %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    logger = logging.getLogger(__name__)
+
+    # Verificar dependencias
+    check_dependencies()
+
+    # Modo reporte
+    if args.report:
+        print("\n📊 Generando reporte de DocChat...")
+        from docchat.engine import DocChatEngine
+        engine = DocChatEngine(mode=args.mode)
+        engine.print_report()
+        sys.exit(0)
+
+    # Modo update
+    if args.update:
+        from docchat.updater import check_for_updates
+        info = check_for_updates()
+        if info:
+            print(f"\n🔄 Nueva versión disponible: v{info['version']}")
+            print(f"   Actual: v{info['current']}")
+            print(f"   Descargar: {info.get('download_url', 'N/A')}")
+        else:
+            print("\n✅ Tienes la versión más reciente.")
+        sys.exit(0)
+
+    # Modo web
+    if args.web:
+        print("\n🌐 Iniciando DocChat Web UI...")
+        from docchat.engine import DocChatEngine
+        from docchat.web_ui import start_web_ui
+        engine = DocChatEngine(mode=args.mode)
+        server = start_web_ui(engine, host="127.0.0.1", port=5000,
+                              open_browser=True)
+        print("Presiona Ctrl+C para detener el servidor.")
+        try:
+            import time
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\n👋 Servidor detenido.")
+            sys.exit(0)
+
+    # Modo normal (UI escritorio)
+    logger.info("🚀 Iniciando DocChat v3...")
+    logger.info(f"   Python: {sys.version}")
+    logger.info(f"   Directorio: {os.path.dirname(os.path.abspath(__file__))}")
+
+    try:
+        from docchat.ui import main as ui_main
+        ui_main()
+    except Exception as e:
+        print(f"\n❌ Error al iniciar DocChat: {e}")
+        traceback.print_exc()
+        input("\nPresiona Enter para salir...")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
     main()
-except Exception as e:
-    print(f"\n❌ Error al iniciar DocChat: {e}")
-    traceback.print_exc()
-    input("\nPresiona Enter para salir...")
-    sys.exit(1)
