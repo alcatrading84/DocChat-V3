@@ -641,6 +641,54 @@ class DocChatEngine:
     def clear(self):
         self.vector_store.clear()
 
+    def summarize(self, on_token: Callable = None) -> str:
+        """Resumir todos los documentos cargados."""
+        if self.vector_store.count == 0:
+            msg = "No hay documentos cargados para resumir."
+            if on_token:
+                for c in msg:
+                    on_token(c)
+            return msg
+
+        sources = ", ".join(self.vector_store.sources)
+        prompt = (
+            f"Resume el contenido de estos documentos de forma clara y organizada.\n\n"
+            f"Documentos: {sources}\n\n"
+            f"Contexto:\n"
+        )
+        # Tomar primeros 10 chunks como muestra
+        texts = [d["text"][:300] for d in self.vector_store.documents[:10]]
+        prompt += "\n\n---\n\n".join(texts)
+
+        messages = [
+            {"role": "system", "content": "Eres un asistente que resume documentos. Sé conciso y organizado."},
+            {"role": "user", "content": prompt},
+        ]
+        return self.inference.chat_stream(messages, on_token=on_token)
+
+    def translate(self, text: str, target: str = "en",
+                  on_token: Callable = None) -> str:
+        """Traducir texto al idioma indicado."""
+        lang_name = {"en": "English", "es": "Spanish"}.get(target, target)
+        messages = [
+            {"role": "system", "content": f"Traduce el texto a {lang_name}. Solo responde con la traducción."},
+            {"role": "user", "content": text},
+        ]
+        return self.inference.chat_stream(messages, on_token=on_token)
+
+    def export_chat(self, chat_html: str, filepath: str):
+        """Exportar chat a TXT."""
+        import re
+        # Limpiar HTML
+        text = re.sub(r'<[^>]+>', '', chat_html)
+        text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+        text = text.replace('&quot;', '"').replace('&#39;', "'")
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("📄 DocChat - Exportación de conversación\n")
+            f.write("=" * 50 + "\n\n")
+            f.write(text)
+        return filepath
+
     def get_stats(self) -> Dict:
         stats = {
             "documents": self.vector_store.count,

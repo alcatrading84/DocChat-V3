@@ -45,11 +45,25 @@ class StreamWorker(QThread):
 
     def run(self):
         try:
-            full = self.engine.query_stream(
-                self.question,
-                on_token=lambda t: self.token.emit(t),
-                use_context=self.use_context,
-            )
+            # Detectar tareas especiales
+            if self.question == "__summarize__":
+                full = self.engine.summarize(
+                    on_token=lambda t: self.token.emit(t)
+                )
+            elif self.question.startswith("__translate__:"):
+                parts = self.question.split(":", 2)
+                target = parts[1]
+                text = parts[2]
+                full = self.engine.translate(
+                    text, target=target,
+                    on_token=lambda t: self.token.emit(t)
+                )
+            else:
+                full = self.engine.query_stream(
+                    self.question,
+                    on_token=lambda t: self.token.emit(t),
+                    use_context=self.use_context,
+                )
             self.finished.emit(full)
         except Exception as e:
             self.error.emit(str(e))
@@ -373,6 +387,22 @@ class DocChatWindow(QMainWindow):
         self.lang_sel.currentIndexChanged.connect(self._change_lang)
         tr.addWidget(self.lang_sel)
 
+        # Botones extra
+        self.btn_summarize = QPushButton("📊 Resumir")
+        self.btn_summarize.setStyleSheet("""
+            QPushButton { background: #2d5c2e; color: white; border: none;
+                border-radius: 4px; padding: 4px 8px; }
+            QPushButton:hover { background: #3d7c3e; }
+        """)
+        self.btn_summarize.clicked.connect(self._summarize_docs)
+        tr.addWidget(self.btn_summarize)
+
+        self.btn_theme = QPushButton("🌙")
+        self.btn_theme.setFixedWidth(30)
+        self.btn_theme.setToolTip("Cambiar tema")
+        self.btn_theme.clicked.connect(self._toggle_theme)
+        tr.addWidget(self.btn_theme)
+
         tr.addStretch()
         cl.addLayout(tr)
 
@@ -413,6 +443,29 @@ class DocChatWindow(QMainWindow):
         """)
         self.btn_send.clicked.connect(self._send)
         ir.addWidget(self.btn_send)
+
+        # Botones extra en input row
+        self.btn_export = QPushButton("📋")
+        self.btn_export.setFixedWidth(36)
+        self.btn_export.setToolTip("Exportar chat")
+        self.btn_export.setStyleSheet("""
+            QPushButton { background: #2a2a4e; color: white; border: none;
+                border-radius: 4px; }
+            QPushButton:hover { background: #3a3a6e; }
+        """)
+        self.btn_export.clicked.connect(self._export_chat)
+        ir.addWidget(self.btn_export)
+
+        self.btn_translate = QPushButton("🌐")
+        self.btn_translate.setFixedWidth(36)
+        self.btn_translate.setToolTip("Traducir última respuesta")
+        self.btn_translate.setStyleSheet("""
+            QPushButton { background: #2a2a4e; color: white; border: none;
+                border-radius: 4px; }
+            QPushButton:hover { background: #3a3a6e; }
+        """)
+        self.btn_translate.clicked.connect(self._translate_last)
+        ir.addWidget(self.btn_translate)
 
         cl.addLayout(ir)
         cp.setLayout(cl)
@@ -678,6 +731,83 @@ class DocChatWindow(QMainWindow):
         self.btn_send.setEnabled(True)
         self.input.setEnabled(True)
         self.sb.showMessage(t("status_error", self.lang), 5000)
+
+    # ----- Nuevas funciones -----
+    def _summarize_docs(self):
+        """Resumir documentos cargados."""
+        if self.engine.vector_store.count == 0:
+            self._msg("error", "No hay documentos cargados para resumir.")
+            return
+        self._msg("system", "📊 Generando resumen...")
+        self._current_response = ""
+        w = StreamWorker(self.engine, "__summarize__", use_context=False)
+        w.task_type = "summarize"
+        w.token.connect(self._on_token)
+        w.finished.connect(lambda r: self._msg("system", "✅ Resumen completado"))
+        w.error.connect(lambda e: self._msg("error", f"Error al resumir: {e}"))
+        w.start()
+
+    def _export_chat(self):
+        """Exportar chat a archivo TXT."""
+        from PyQt6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exportar chat", "chat_docchat.txt",
+            "Archivos de texto (*.txt);;Todos (*)"
+        )
+        if path:
+            try:
+                self.engine.export_chat(self.chat.toHtml(), path)
+                self.sb.showMessage(f"✅ Exportado: {path}", 5000)
+            except Exception as e:
+                self._msg("error", f"Error al exportar: {e}")
+
+    def _translate_last(self):
+        """Traducir último mensaje del asistente al inglés/español alternando."""
+        # Buscar última respuesta del asistente en el chat
+        html = self.chat.toHtml()
+        import re
+        # Extraer texto entre tags de color #81c784 (verde del asistente)
+        parts = re.findall(r'<span[^>]*style="[^"]*color:#81c784[^"]*"[^>]*>(.*?)</span>', html, re.DOTALL)
+        if not parts:
+            self._msg("error", "No hay respuesta para traducir.")
+            return
+        last = parts[-1]
+        # Limpiar HTML
+        last = re.sub(r'<[^>]+>', '', last)
+        last = last.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+        if not last.strip():
+            self._msg("error", "No hay texto que traducir.")
+            return
+        target = "es" if self.lang == "en" else "en"
+        lang_name = {"es": "español", "en": "inglés"}
+        self._msg("system", f"🌐 Traduciendo a {lang_name[target]}...")
+        self._current_response = ""
+        w = StreamWorker(self.engine, f"__translate__:{target}:{last}", use_context=False)
+        w.task_type = "translate"
+        w.token.connect(self._on_token)
+        w.finished.connect(lambda r: self._msg("system", f"✅ Traducción a {lang_name[target]} completada"))
+        w.error.connect(lambda e: self._msg("error", f"Error al traducir: {e}"))
+        w.start()
+
+    _dark_theme = True
+    def _toggle_theme(self):
+        """Alternar entre tema oscuro y claro."""
+        self._dark_theme = not self._dark_theme
+        if self._dark_theme:
+            self.btn_theme.setText("🌙")
+            app = self.window().styleSheet()
+            self.setStyleSheet("""
+                QMainWindow { background: #12121a; }
+                QToolTip { background: #1a1a2e; color: #e0e0e0; border: 1px solid #444; padding: 4px; }
+            """)
+            self.chat.setStyleSheet("QTextEdit { background: #0d0d1a; color: #e0e0e0; border: 1px solid #333; border-radius: 4px; padding: 8px; }")
+        else:
+            self.btn_theme.setText("☀️")
+            self.setStyleSheet("""
+                QMainWindow { background: #f5f5f5; }
+                QToolTip { background: #fff; color: #333; border: 1px solid #ccc; }
+            """)
+            self.chat.setStyleSheet("QTextEdit { background: #ffffff; color: #222222; border: 1px solid #ccc; border-radius: 4px; padding: 8px; }")
 
     # ----- Acciones -----
     def _clear_all(self):
