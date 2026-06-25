@@ -16,15 +16,15 @@ from pathlib import Path
 from typing import Optional, Dict, Tuple
 from datetime import datetime, timedelta
 
+from docchat import config
+
 logger = logging.getLogger(__name__)
 
-# Configuración
-GITHUB_REPO = "tuusuario/DocChat"  # ← CAMBIA ESTO a tu usuario/repo
-GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-CURRENT_VERSION = "3.0.0"
-UPDATE_CHECK_FILE = os.path.join(
-    os.path.expanduser("~"), ".docchat", "last_update_check.json"
-)
+# Configuración (centralizada en docchat/config.py)
+GITHUB_REPO = config.GITHUB_REPO
+GITHUB_API = config.GITHUB_API
+CURRENT_VERSION = config.CURRENT_VERSION
+UPDATE_CHECK_FILE = config.UPDATE_CHECK_FILE
 
 
 # =============================================================================

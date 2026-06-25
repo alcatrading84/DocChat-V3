@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>DocChat v3 — Guía Completa</title>
+<style>
+@page { size: A4; margin: 0; }
+html, body { margin: 0; padding: 0; background: #000020; font-family: 'Segoe UI', -apple-system, sans-serif; color: #BCBECE; }
+.page { width: 210mm; min-height: 297mm; padding: 25mm 30mm; box-sizing: border-box; position: relative; }
+.page::after { content: ''; position: absolute; bottom: 0; left: 30mm; right: 30mm; height: 1px; background: #1E293B; }
+
+/* Cover */
+.cover { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background: linear-gradient(135deg, #000020 0%, #0F172A 100%); }
+.cover-icon { font-size: 64px; margin-bottom: 20px; }
+.cover h1 { font-size: 52px; font-weight: 900; color: #E2E8F0; margin: 0 0 10px 0; letter-spacing: -1px; }
+.cover .subtitle { font-size: 22px; color: #3A83F1; margin: 0 0 8px 0; font-weight: 400; }
+.cover .tagline { font-size: 14px; color: #6B7280; letter-spacing: 3px; text-transform: uppercase; }
+.cover .version { position: absolute; bottom: 60px; font-size: 12px; color: #6B7280; }
+
+/* Sections */
+h2 { font-size: 24px; font-weight: 700; color: #E2E8F0; margin: 0 0 16px 0; padding-bottom: 8px; border-bottom: 2px solid #3A83F1; }
+h3 { font-size: 17px; font-weight: 600; color: #3A83F1; margin: 16px 0 8px 0; }
+p { font-size: 12px; line-height: 1.7; margin: 0 0 10px 0; color: #BCBECE; }
+
+/* Cards */
+.card { background: #161F32; border: 1px solid #1E293B; border-radius: 8px; padding: 14px 18px; margin: 12px 0; }
+.card h4 { color: #3A83F1; font-size: 13px; font-weight: 600; margin: 0 0 6px 0; }
+.card p, .card li { font-size: 11px; line-height: 1.6; }
+
+/* Code */
+code { background: #0F172A; color: #22C55E; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+pre { background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 14px; overflow-x: auto; font-size: 11px; font-family: 'Cascadia Code', 'Fira Code', monospace; color: #BCBECE; margin: 8px 0; }
+pre .cmd { color: #22C55E; }
+pre .comment { color: #6B7280; }
+
+/* Lists */
+ul, ol { margin: 6px 0; padding-left: 20px; }
+li { font-size: 12px; line-height: 1.7; margin: 3px 0; }
+li strong { color: #E2E8F0; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11px; }
+th { background: #1E3A5F; color: #E2E8F0; text-align: left; padding: 8px 12px; font-weight: 600; }
+td { padding: 7px 12px; border-bottom: 1px solid #1E293B; }
+tr:hover td { background: #161F32; }
+
+/* Features grid */
+.features { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.feature { background: #161F32; border: 1px solid #1E293B; border-radius: 6px; padding: 10px 14px; font-size: 11px; }
+.feature b { color: #3A83F1; }
+
+/* Badge */
+.badge { display: inline-block; background: #3A83F1; color: white; padding: 2px 10px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+
+/* TOC */
+.toc { background: #161F32; border: 1px solid #1E293B; border-radius: 8px; padding: 16px 20px; margin: 12px 0; }
+.toc h3 { margin-top: 0; }
+.toc ol { margin: 0; padding-left: 24px; }
+.toc li { margin: 4px 0; }
+.toc a { color: #3A83F1; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- ==================== PORTADA ==================== -->
+<div class="page cover">
+    <div class="cover-icon">📄</div>
+    <h1>DocChat</h1>
+    <div class="subtitle">Asistente Local de Documentos con IA</div>
+    <div class="tagline">100% local · Sin API keys · Sin internet</div>
+    <div class="version">Versión 3.0.0 — Guía Completa de Usuario</div>
+</div>
+
+<!-- ==================== ÍNDICE ==================== -->
+<div class="page">
+    <h2>📋 Índice</h2>
+    <div class="toc">
+        <ol>
+            <li><a href="#s1">Introducción</a></li>
+            <li><a href="#s2">Requisitos del Sistema</a></li>
+            <li><a href="#s3">Instalación</a></li>
+            <li><a href="#s4">Cómo Ejecutar</a></li>
+            <li><a href="#s5">Modos de Funcionamiento</a></li>
+            <li><a href="#s6">Activar LM Studio</a></li>
+            <li><a href="#s7">Guía de Uso</a></li>
+            <li><a href="#s8">Nuevas Funcionalidades v3</a></li>
+            <li><a href="#s9">Formatos Soportados</a></li>
+            <li><a href="#s10">Solución de Problemas</a></li>
+            <li><a href="#s11">Estructura del Proyecto</a></li>
+            <li><a href="#s12">Licencia</a></li>
+        </ol>
+    </div>
+</div>
+
+<!-- ==================== 1. INTRODUCCIÓN ==================== -->
+<div class="page" id="s1">
+    <h2>1. Introducción</h2>
+    <p><strong>DocChat</strong> es un asistente de IA que te permite chatear con tus documentos de forma natural. Sube un PDF, Word, Excel o cualquier documento, haz preguntas sobre su contenido y obtén respuestas <strong>en tiempo real</strong>.</p>
+
+    <div class="features">
+        <div class="feature"><b>🔒 100% Local</b><br>Tus datos nunca salen de tu PC</div>
+        <div class="feature"><b>🔑 Sin API Keys</b><br>No necesitas OpenAI ni servicios externos</div>
+        <div class="feature"><b>🎯 Sin LM Studio</b><br>Usa modelos GGUF locales</div>
+        <div class="feature"><b>💰 Gratuito</b><br>Sin costos de uso ni suscripciones</div>
+        <div class="feature"><b>📊 Multi-formato</b><br>20+ formatos de documentos</div>
+        <div class="feature"><b>🚀 Streaming</b><br>Respuestas en tiempo real</div>
+    </div>
+
+    <div class="card">
+        <h4>🎯 ¿Para qué sirve DocChat?</h4>
+        <ul>
+            <li>📄 Resumir documentos largos al instante</li>
+            <li>🔍 Encontrar información específica en PDFs o Word</li>
+            <li>📊 Extraer datos de tablas en Excel o CSV</li>
+            <li>🌐 Traducir respuestas a inglés/español</li>
+            <li>📚 Analizar múltiples documentos a la vez</li>
+        </ul>
+    </div>
+</div>
+
+<!-- ==================== 2. REQUISITOS ==================== -->
+<div class="page" id="s2">
+    <h2>2. Requisitos del Sistema</h2>
+
+    <h3>⚙️ Mínimos</h3>
+    <ul>
+        <li><strong>Sistema operativo:</strong> Windows 10/11, Linux o macOS</li>
+        <li><strong>RAM:</strong> 4 GB (8 GB recomendado)</li>
+        <li><strong>Disco:</strong> 1 GB libre para el modelo local</li>
+        <li><strong>Python:</strong> 3.10+ (solo si usas código fuente)</li>
+    </ul>
+
+    <h3>🧩 Opcionales</h3>
+    <table>
+        <tr><th>Componente</th><th>Para qué sirve</th></tr>
+        <tr><td>Tesseract OCR</td><td>Leer PDFs escaneados (imágenes)</td></tr>
+        <tr><td>LM Studio</td><td>Usar modelos más grandes vía API local</td></tr>
+        <tr><td>OpenAI API Key</td><td>Modo Cloud con GPT-4o-mini</td></tr>
+    </table>
+
+    <div class="card">
+        <h4>💡 Nota</h4>
+        <p>DocChat funciona completamente sin internet. El modelo local se descarga automáticamente la primera vez que ejecutas el programa (~1 GB).</p>
+    </div>
+</div>
+
+<!-- ==================== 3. INSTALACIÓN ==================== -->
+<div class="page" id="s3">
+    <h2>3. Instalación</h2>
+
+    <h3>📦 Opción A: Ejecutable (Recomendado)</h3>
+    <ol>
+        <li>Descarga <code>DocChat.exe</code> desde GitHub Releases</li>
+        <li>Haz <strong>doble clic</strong> para ejecutar</li>
+        <li>En la primera ejecución, el modelo se descarga automáticamente (~1 GB)</li>
+    </ol>
+
+    <div class="card">
+        <p>✅ No necesitas instalar Python ni ninguna dependencia. El .exe incluye todo.</p>
+    </div>
+
+    <h3>🐍 Opción B: Desde código fuente</h3>
+    <pre><span class="comment"># 1. Clonar el repositorio</span>
+git clone https://github.com/tuusuario/DocChat.git
+cd DocChat
+
+<span class="comment"># 2. Instalar dependencias</span>
+pip install -r requirements.txt
+
+<span class="comment"># 3. Ejecutar</span>
+python run.py</pre>
+</div>
+
+<!-- ==================== 4. CÓMO EJECUTAR ==================== -->
+<div class="page" id="s4">
+    <h2>4. Cómo Ejecutar</h2>
+
+    <h3>🖥️ Interfaz de Escritorio</h3>
+    <pre>python run.py</pre>
+        <p>La interfaz principal con sidebar, chat y selector de modos.</p>
+        
+        <h3>🌐 Web UI</h3>
+        <pre>python run.py --web</pre>
+        <p>Abre la interfaz en tu navegador en <code>http://localhost:5000</code>. También disponible desde la UI de escritorio con el botón 🌐.</p>
+
+    <h3>⚙️ Opciones adicionales</h3>
+    <table>
+        <tr><th>Comando</th><th>Función</th></tr>
+        <tr><td><code>--debug</code></td><td>Modo debug con consola detallada</td></tr>
+        <tr><td><code>--report</code></td><td>Mostrar reporte de métricas de uso</td></tr>
+        <tr><td><code>--update</code></td><td>Buscar actualizaciones en GitHub</td></tr>
+        <tr><td><code>--mode lmstudio</code></td><td>Forzar modo LM Studio</td></tr>
+        <tr><td><code>--mode cloud</code></td><td>Forzar modo OpenAI Cloud</td></tr>
+        <tr><td><code>--mode local_gguf</code></td><td>Forzar modo GGUF local</td></tr>
+        <tr><td><code>--mode online</code></td><td>Alias para <code>lmstudio</code></td></tr>
+        <tr><td><code>--mode offline</code></td><td>Alias para <code>local_gguf</code></td></tr>
+    </table>
+</div>
+
+<!-- ==================== 5. MODOS ==================== -->
+<div class="page" id="s5">
+    <h2>5. Modos de Funcionamiento</h2>
+    <p>DocChat tiene <strong>3 modos</strong> seleccionables desde la interfaz, cada uno con sus ventajas:</p>
+
+    <div class="card">
+        <h4>🖥️ Modo LM Studio (por defecto)</h4>
+        <p>Conecta con <strong>LM Studio</strong> corriendo en <code>http://127.0.0.1:1234</code>.</p>
+        <ul>
+            <li>💡 Ventajas: modelos más grandes, mayor calidad de respuesta</li>
+            <li>⚠️ Requisito: tener LM Studio abierto con un modelo cargado</li>
+            <li>🔧 Ideal para: respuestas detalladas y análisis profundos</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h4>☁️ Modo Cloud (OpenAI)</h4>
+        <p>Usa la API de <strong>OpenAI</strong> (modelo gpt-4o-mini).</p>
+        <ul>
+            <li>💡 Ventajas: máxima calidad de respuestas</li>
+            <li>⚠️ Requisito: API key válida de OpenAI</li>
+            <li>🔧 Ideal para: tareas complejas que requieren precisión</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h4>🏠 Modo GGUF Local <span class="badge">NUEVO</span></h4>
+        <p>Usa <strong>llama-cpp-python</strong> para inferencia 100% local.</p>
+        <ul>
+            <li>💡 Ventajas: no requiere LM Studio ni internet</li>
+            <li>⚠️ Requisito: el modelo se descarga automáticamente (~1 GB)</li>
+            <li>🔧 Modelo por defecto: Qwen2.5-1.5B-Instruct Q4_K_M</li>
+            <li>🔧 Alternativa ligera: Qwen2.5-0.5B (~350 MB)</li>
+        </ul>
+    </div>
+</div>
+
+<!-- ==================== 6. ACTIVAR LM STUDIO ==================== -->
+<div class="page" id="s6">
+    <h2>6. Cómo Activar LM Studio</h2>
+    <p>Sigue estos pasos para usar LM Studio con DocChat:</p>
+
+    <table>
+        <tr><th>Paso</th><th>Acción</th></tr>
+        <tr><td>1</td><td>Descarga LM Studio desde <code>lmstudio.ai</code> e instálalo</td></tr>
+        <tr><td>2</td><td>Abre LM Studio y busca un modelo (ej: <code>Qwen2.5-7B-Instruct</code>)</td></tr>
+        <tr><td>3</td><td>Descarga el modelo desde la interfaz de LM Studio</td></tr>
+        <tr><td>4</td><td>Haz clic en el botón <strong>"Start Server"</strong> (esquina inferior izquierda)</td></tr>
+        <tr><td>5</td><td>Verifica que el servidor corre en <code>http://127.0.0.1:1234</code></td></tr>
+        <tr><td>6</td><td>En DocChat: selecciona <strong>"🖥️ LM"</strong> en el selector de modo superior</td></tr>
+    </table>
+
+    <div class="card">
+        <h4>🔍 Verificar conexión</h4>
+        <p>DocChat mostrará <strong>"🟢 Conectado"</strong> en la barra de estado cuando detecte LM Studio correctamente. Si ves <strong>"🔴 Desconectado"</strong>, revisa que el servidor esté iniciado.</p>
+    </div>
+</div>
+
+<!-- ==================== 7. GUÍA DE USO ==================== -->
+<div class="page" id="s7">
+    <h2>7. Guía de Uso</h2>
+
+    <h3>📎 Cargar Documentos</h3>
+    <ol>
+        <li><strong>Arrastra</strong> un PDF, Word o TXT al panel izquierdo (sidebar)</li>
+        <li>O <strong>haz clic</strong> en la zona de carga para seleccionar archivos</li>
+        <li>DocChat soporta <strong>20+ formatos</strong> (PDF, DOCX, TXT, MD, HTML, CSV, XLSX, PPTX, código y más)</li>
+    </ol>
+
+    <h3>💬 Chatear con Documentos</h3>
+    <ol>
+        <li>Carga uno o más documentos en la sidebar</li>
+        <li>Escribe tu pregunta en el campo de texto inferior</li>
+        <li>Presiona <strong>Enter</strong> o haz clic en el botón <strong>▶</strong></li>
+        <li>Las respuestas aparecen <strong>en tiempo real</strong> (streaming)</li>
+        <li>El modo <strong>RAG</strong> activado usa el contexto de los documentos</li>
+    </ol>
+
+    <h3>🛠️ Funciones Adicionales</h3>
+    <table>
+        <tr><th>Botón</th><th>Función</th></tr>
+        <tr><td>📊 Resumir</td><td>Genera un resumen de todos los documentos cargados</td></tr>
+        <tr><td>🌐 Traducir</td><td>Traduce la última respuesta a inglés/español</td></tr>
+        <tr><td>📋 Exportar</td><td>Guarda la conversación a un archivo TXT</td></tr>
+        <tr><td>🔄 Actualizar</td><td>Busca nuevas versiones en GitHub</td></tr>
+        <tr><td>🌙 Tema</td><td>Alterna entre tema oscuro/claro</td></tr>
+        <tr><td>🇪🇸/🇬🇧</td><td>Cambia el idioma de la interfaz</td></tr>
+        <tr><td>📄 RAG</td><td>Activa/desactiva la búsqueda en documentos</td></tr>
+    </table>
+</div>
+
+<!-- ==================== 8. NUEVAS FUNCIONALIDADES ==================== -->
+<div class="page" id="s8">
+    <h2>8. Nuevas Funcionalidades v3</h2>
+
+    <div class="features">
+        <div class="feature"><b>🏆 Modo GGUF Local</b><br>Inferencia sin LM Studio</div>
+        <div class="feature"><b>🖼️ OCR</b><br>Lee PDFs escaneados</div>
+        <div class="feature"><b>📊 Multi-formato</b><br>CSV, Excel, PPTX, MD, HTML, código</div>
+        <div class="feature"><b>🌐 Web UI</b><br>Interfaz desde el navegador</div>
+        <div class="feature"><b>📈 Métricas</b><br>Estadísticas de uso detalladas</div>
+        <div class="feature"><b>🔄 Auto-updates</b><br>Actualizaciones desde GitHub</div>
+        <div class="feature"><b>🎨 UI Rediseñada</b><br>Interfaz profesional oscura</div>
+        <div class="feature"><b>📦 Auto-descarga</b><br>Modelo se descarga solo</div>
+        <div class="feature"><b>🌍 ES/EN</b><br>Traducciones completas</div>
+        <div class="feature"><b>🚀 SSE Real</b><br>Streaming en Web UI</div>
+        <div class="feature"><b>💾 Caché Embeddings</b><br>Respuestas más rápidas</div>
+        <div class="feature"><b>⚙️ Config Central</b><br>Toda la config en un archivo</div>
+    </div>
+
+    <div class="card">
+        <h4>🎯 ¿Por qué actualizar a v3?</h4>
+        <p>La versión 3 trae una arquitectura completamente renovada: más rápida, más estable y con soporte para más formatos que nunca. El nuevo modo GGUF Local elimina la dependencia de LM Studio, haciendo que DocChat funcione en cualquier PC sin configuraciones adicionales.</p>
+    </div>
+</div>
+
+<!-- ==================== 9. FORMATOS ==================== -->
+<div class="page" id="s9">
+    <h2>9. Formatos Soportados</h2>
+    <p>DocChat puede leer y procesar más de <strong>20 formatos</strong> de archivo:</p>
+
+    <table>
+        <tr><th>Formato</th><th>Extensión</th><th>Librería</th></tr>
+        <tr><td>PDF</td><td>.pdf</td><td>pypdf + OCR</td></tr>
+        <tr><td>Word</td><td>.docx</td><td>python-docx</td></tr>
+        <tr><td>Texto plano</td><td>.txt</td><td>Nativo</td></tr>
+        <tr><td>Markdown</td><td>.md</td><td>Nativo</td></tr>
+        <tr><td>HTML</td><td>.html, .htm</td><td>Parser HTML</td></tr>
+        <tr><td>CSV</td><td>.csv</td><td>csv</td></tr>
+        <tr><td>Excel</td><td>.xlsx, .xls</td><td>openpyxl</td></tr>
+        <tr><td>PowerPoint</td><td>.pptx</td><td>python-pptx</td></tr>
+        <tr><td>JSON</td><td>.json</td><td>json</td></tr>
+        <tr><td>XML</td><td>.xml</td><td>Nativo</td></tr>
+        <tr><td>YAML</td><td>.yaml, .yml</td><td>pyyaml</td></tr>
+        <tr><td>Código</td><td>.py, .js, .ts, .java, .cpp, .c, .go, .rs, .rb, .php, .swift, .kt, .sql, .sh, .bat</td><td>Nativo</td></tr>
+    </table>
+
+    <div class="card">
+        <h4>💡 PDFs Escaneados</h4>
+        <p>Si tu PDF contiene imágenes escaneadas (no texto seleccionable), instala <strong>Tesseract OCR</strong> para que DocChat pueda extraer el texto automáticamente.</p>
+    </div>
+</div>
+
+<!-- ==================== 10. SOLUCIÓN DE PROBLEMAS ==================== -->
+<div class="page" id="s10">
+    <h2>10. Solución de Problemas</h2>
+
+    <div class="card">
+        <h4>🔴 "No se puede conectar con LM Studio"</h4>
+        <ul>
+            <li>Asegúrate de que LM Studio esté abierto</li>
+            <li>Verifica que el servidor esté iniciado (Start Server)</li>
+            <li>Confirma que el puerto sea <code>1234</code></li>
+            <li>Prueba cambiando al modo <strong>🏠 GGUF</strong> que no requiere LM Studio</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h4>⏳ "El modelo no responde" o "tarda mucho"</h4>
+        <ul>
+            <li>La primera vez tarda ~1-2 min en descargar el modelo</li>
+            <li>Verifica que tengas suficiente RAM disponible (mín 4 GB)</li>
+            <li>Prueba con un modelo más pequeño (Qwen2.5-0.5B)</li>
+            <li>Cierra otros programas pesados</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h4>❌ "Error al cargar PDF"</h4>
+        <ul>
+            <li>Asegúrate que el PDF no esté protegido con contraseña</li>
+            <li>Para PDFs escaneados, instala Tesseract OCR</li>
+            <li>Prueba con un archivo más pequeño</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h4>💥 "El .exe no abre o se cierra"</h4>
+        <ul>
+            <li>Asegúrate de tener la última versión del .exe</li>
+            <li>Ejecuta desde una terminal para ver errores: <code>DocChat.exe --debug</code></li>
+            <li>Desactiva el antivirus temporalmente (a veces bloquea .exe nuevos)</li>
+            <li>Verifica que no falten DLLs (VC++ Redistributable)</li>
+        </ul>
+    </div>
+</div>
+
+<!-- ==================== 11. ESTRUCTURA ==================== -->
+<div class="page" id="s11">
+    <h2>11. Estructura del Proyecto</h2>
+    <pre>DocChat/
+├── run.py                 <span class="comment"># Lanzador (CLI + args)</span>
+├── requirements.txt       <span class="comment"># Dependencias</span>
+├── DocChat.spec           <span class="comment"># Config PyInstaller</span>
+├── README.md              <span class="comment"># Documentación</span>
+├── dist/
+│   └── DocChat.exe        <span class="comment"># Ejecutable portable</span>
+└── docchat/
+    ├── __init__.py
+    ├── config.py           <span class="comment"># ⚙️ Configuración centralizada</span>
+    ├── version.py          <span class="comment"># 📌 Versión del proyecto</span>
+    ├── engine.py           <span class="comment"># 🏆 Motor RAG optimizado</span>
+    ├── local_model.py      <span class="comment"># 🧠 Modelo local GGUF</span>
+    ├── ui.py               <span class="comment"># 🖥️ UI escritorio PyQt6</span>
+    ├── web_ui.py           <span class="comment"># 🌐 Web UI Flask</span>
+    ├── ocr.py              <span class="comment"># 👁️ OCR para PDFs</span>
+    ├── formats.py          <span class="comment"># 📊 Multi-formato (20+)</span>
+    ├── metrics.py          <span class="comment"># 📈 Métricas de uso</span>
+    ├── updater.py          <span class="comment"># 🔄 Auto-updates</span>
+    ├── lang.py             <span class="comment"># 🌍 Traducciones ES/EN</span>
+    ├── config.py           <span class="comment"># ⚙️ Config centralizada</span>
+    └── version.py          <span class="comment"># 📌 Versión del proyecto</span></pre>
+</div>
+
+<!-- ==================== 12. LICENCIA ==================== -->
+<div class="page" id="s12">
+    <h2>12. Licencia</h2>
+
+    <div class="card" style="text-align: center; padding: 30px;">
+        <h4 style="font-size: 18px; margin-bottom: 10px;">📜 MIT License</h4>
+        <p style="font-size: 13px; color: #6B7280; margin: 0;">
+            Copyright © 2026 DocChat Team<br><br>
+            Permission is hereby granted, free of charge, to any person obtaining a copy<br>
+            of this software and associated documentation files (the "Software"), to deal<br>
+            in the Software without restriction, including without limitation the rights<br>
+            to use, copy, modify, merge, publish, distribute, sublicense, and/or sell<br>
+            copies of the Software, and to permit persons to whom the Software is<br>
+            furnished to do so, subject to the following conditions:<br><br>
+            The above copyright notice and this permission notice shall be included in all<br>
+            copies or substantial portions of the Software.<br><br>
+            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR<br>
+            IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,<br>
+            FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+        </p>
+    </div>
+
+    <p style="text-align: center; color: #6B7280; font-size: 11px; margin-top: 30px;">
+        📄 DocChat v3.0.0 — Documentación generada el 24 de junio de 2026<br>
+        🌐 https://github.com/tuusuario/DocChat
+    </p>
+</div>
+
+</body>
+</html>

@@ -19,12 +19,12 @@ from typing import Dict, List, Optional
 from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 
+from docchat import config
+
 logger = logging.getLogger(__name__)
 
-# Archivo de métricas
-METRICS_FILE = os.path.join(
-    os.path.expanduser("~"), ".docchat", "metrics.json"
-)
+# Archivo de métricas (centralizado en config.py)
+METRICS_FILE = config.METRICS_FILE
 
 
 # =============================================================================

@@ -10,6 +10,7 @@ import os
 import json
 import logging
 import threading
+import queue
 import webbrowser
 from typing import Optional
 
@@ -37,6 +38,13 @@ class DocChatWebServer:
 
     def start(self, open_browser: bool = True):
         """Iniciar el servidor web en un hilo separado."""
+        self._start(open_browser)
+
+    def run(self, open_browser: bool = True):
+        """Alias para start(). Inicia el servidor web."""
+        self._start(open_browser)
+
+    def _start(self, open_browser: bool = True):
         try:
             from flask import Flask, request, jsonify, render_template_string
         except ImportError:
@@ -404,25 +412,38 @@ class DocChatWebServer:
 
         @app.route("/stream", methods=["POST"])
         def stream():
-            """Streaming de respuesta (SSE)."""
+            """Streaming de respuesta (SSE real con tokens en vivo)."""
             data = request.get_json()
             question = data.get("question", "")
             use_context = data.get("use_context", True)
 
             def generate():
-                full = self.engine.query_stream(
-                    question,
-                    on_token=lambda t: None,  # Se maneja en el flujo
-                    use_context=use_context,
-                )
+                q = queue.Queue()
+                _done = object()
 
-                # Simular streaming palabra por palabra
-                words = full.split()
-                for i, word in enumerate(words):
-                    token = word + (" " if i < len(words) - 1 else "")
-                    yield f"data: {json.dumps({'token': token})}\n\n"
-                    import time
-                    time.sleep(0.02)  # Simular velocidad de tipeo
+                def on_token(tok: str):
+                    q.put(tok)
+
+                def run_query():
+                    try:
+                        self.engine.query_stream(
+                            question,
+                            on_token=on_token,
+                            use_context=use_context,
+                        )
+                    except Exception as e:
+                        q.put(f"\n\n❌ Error: {e}")
+                    finally:
+                        q.put(_done)
+
+                thread = threading.Thread(target=run_query, daemon=True)
+                thread.start()
+
+                while True:
+                    item = q.get()
+                    if item is _done:
+                        break
+                    yield f"data: {json.dumps({'token': item})}\n\n"
                 yield "data: [DONE]\n\n"
 
             from flask import Response

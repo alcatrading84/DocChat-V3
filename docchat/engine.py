@@ -16,36 +16,21 @@ from pathlib import Path
 from typing import List, Dict, Optional, Callable
 import httpx
 
-
-# =============================================================================
-# CONFIGURACIÓN
-# =============================================================================
-
-LM_STUDIO_URL = "http://127.0.0.1:1234/v1"
-EMBEDDING_MODEL = "text-embedding-nomic-embed-text-v1.5"
-CHAT_MODEL = "qwen2.5-coder-3b-instruct"
-CHUNK_SIZE = 300       # Más pequeños = más rápido de procesar
-CHUNK_OVERLAP = 30
-TOP_K = 3               # Menos fragmentos = respuesta más rápida
-DATA_DIR = os.path.join(os.path.expanduser("~"), ".docchat")
-# Forzar backslash en Windows
-if os.name == "nt":
-    DATA_DIR = DATA_DIR.replace("/", "\\")
+from docchat.local_model import LocalModel
+from docchat import config
 
 
-# =============================================================================
-# CLIENTE LM STUDIO (con streaming)
 # =============================================================================
 
 class LMStudioClient:
     """Cliente HTTP para LM Studio con streaming."""
 
-    def __init__(self, base_url: str = LM_STUDIO_URL):
+    def __init__(self, base_url: str = config.LM_STUDIO_URL):
         self.base_url = base_url
         self._client = httpx.Client(timeout=180)
         self._client_embed = httpx.Client(timeout=60)
 
-    def chat_stream(self, messages: List[Dict], model: str = CHAT_MODEL,
+    def chat_stream(self, messages: List[Dict], model: str = config.CHAT_MODEL,
                     max_tokens: int = 1024, temperature: float = 0.7,
                     on_token: Callable = None) -> str:
         """Chat con streaming."""
@@ -76,10 +61,10 @@ class LMStudioClient:
                         continue
         return full
 
-    def chat(self, messages, model=CHAT_MODEL, **kw):
+    def chat(self, messages, model=config.CHAT_MODEL, **kw):
         return self.chat_stream(messages, model=model, **kw)
 
-    def embed(self, text: str, model=EMBEDDING_MODEL):
+    def embed(self, text: str, model=config.EMBEDDING_MODEL):
         for i in range(2):
             try:
                 r = self._client_embed.post(f"{self.base_url}/embeddings",
@@ -194,57 +179,13 @@ class OpenAIClient:
 # =============================================================================
 
 def load_document(filepath: str) -> str:
-    """Cargar texto de PDF, DOCX o TXT."""
-    ext = Path(filepath).suffix.lower()
-
-    if ext == ".txt":
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-            return f.read()
-
-    elif ext == ".docx":
-        from docx import Document as DocxDoc
-        doc = DocxDoc(filepath)
-        return "\n".join(p.text for p in doc.paragraphs)
-
-    elif ext == ".pdf":
-        from pypdf import PdfReader
-        try:
-            reader = PdfReader(filepath)
-        except Exception as e:
-            raise ValueError(f"No se pudo abrir el PDF: {e}")
-
-        if reader.is_encrypted:
-            try:
-                reader.decrypt("")
-            except Exception:
-                raise ValueError(
-                    "PDF protegido con contraseña. "
-                    "Guarda una copia sin protección e intenta de nuevo."
-                )
-
-        text = []
-        for i, page in enumerate(reader.pages):
-            try:
-                t = page.extract_text()
-                if t and t.strip():
-                    text.append(t)
-            except Exception:
-                pass
-
-        result = "\n".join(text)
-        if not result.strip():
-            raise ValueError(
-                "No se pudo extraer texto. "
-                "Puede ser un PDF escaneado (imágenes)."
-            )
-        return result
-
-    else:
-        raise ValueError(f"Formato no soportado: {ext}")
+    """Cargar texto de cualquier documento soportado (PDF, DOCX, TXT, MD, HTML, CSV, XLSX, PPTX, ...)."""
+    from docchat.formats import load_any_document
+    return load_any_document(filepath)
 
 
-def chunk_text(text: str, chunk_size: int = CHUNK_SIZE,
-               overlap: int = CHUNK_OVERLAP) -> List[str]:
+def chunk_text(text: str, chunk_size: int = config.CHUNK_SIZE,
+               overlap: int = config.CHUNK_OVERLAP) -> List[str]:
     """Dividir texto en chunks pequeños."""
     words = text.split()
     chunks = []
@@ -270,8 +211,8 @@ class VectorStore:
         if db_path:
             self.db_path = db_path
         else:
-            self.db_path = os.path.join(DATA_DIR, "docchat_data")
-        os.makedirs(DATA_DIR, exist_ok=True)
+            self.db_path = os.path.join(config.DATA_DIR, "docchat_data")
+        os.makedirs(config.DATA_DIR, exist_ok=True)
 
         self.documents: List[Dict] = []
         self.embeddings: List[np.ndarray] = []
@@ -302,48 +243,6 @@ class VectorStore:
             print(f"⚠️ Error al guardar: {e}")
 
     def add_one(self, text: str, embedding: List[float], source: str = ""):
-        doc_id = hashlib.md5(text.encode()).hexdigest()[:12]
-        self.documents.append({"id": doc_id, "text": text, "source": source})
-        self.embeddings.append(np.array(embedding, dtype=np.float32))
-
-    def search(self, query_embedding: List[float], top_k: int = TOP_K) -> List[tuple]:
-        if not self.embeddings:
-            return []
-        query_vec = np.array(query_embedding, dtype=np.float32)
-        q_norm = np.linalg.norm(query_vec)
-        if q_norm > 0:
-            query_vec = query_vec / q_norm
-        emb_array = np.array(self.embeddings, dtype=np.float32)
-        norms = np.linalg.norm(emb_array, axis=1)
-        norms[norms == 0] = 1
-        emb_array = emb_array / norms[:, np.newaxis]
-        scores = np.dot(emb_array, query_vec)
-        indices = np.argsort(scores)[-top_k:][::-1]
-        results = []
-        for idx in indices:
-            doc = self.documents[idx]
-            results.append((doc["text"], doc["source"], float(scores[idx])))
-        return results
-
-    def clear(self):
-        self.documents = []
-        self.embeddings = []
-        path = self._path()
-        if os.path.exists(path):
-            try:
-                os.remove(path)
-            except Exception:
-                pass
-
-    @property
-    def count(self) -> int:
-        return len(self.documents)
-
-    @property
-    def sources(self) -> List[str]:
-        return list(set(d["source"] for d in self.documents if d["source"]))
-
-    def add_one(self, text: str, embedding: List[float], source: str = ""):
         """Agregar un solo texto con su embedding (sin pico de RAM)."""
         doc_id = hashlib.md5(text.encode()).hexdigest()[:12]
         self.documents.append({
@@ -354,7 +253,7 @@ class VectorStore:
         self.embeddings.append(np.array(embedding, dtype=np.float32))
         self._dirty = True
 
-    def search(self, query_embedding: List[float], top_k: int = TOP_K) -> List[tuple]:
+    def search(self, query_embedding: List[float], top_k: int = config.TOP_K) -> List[tuple]:
         """Buscar textos similares (coseno)."""
         if not self.embeddings:
             return []
@@ -401,45 +300,105 @@ class VectorStore:
 
 
 # =============================================================================
+# CLIENTE LOCAL GGUF (llama-cpp-python)
+# =============================================================================
+
+class LocalModelClient:
+    """Wrapper para LocalModel, compatible con la interfaz de LMStudioClient."""
+
+    def __init__(self):
+        self._model = None
+        self._chat_model = config.CHAT_MODEL
+
+    def _ensure_loaded(self):
+        if self._model is None:
+            self._model = LocalModel()
+
+    def chat_stream(self, messages, model=None, max_tokens=1024,
+                    temperature=0.7, on_token=None) -> str:
+        self._ensure_loaded()
+        return self._model.chat_stream(
+            messages, max_tokens=max_tokens,
+            temperature=temperature, on_token=on_token,
+        )
+
+    def chat(self, messages, model=None, max_tokens=1024,
+             temperature=0.7, **kw) -> str:
+        return self.chat_stream(messages, max_tokens=max_tokens,
+                                temperature=temperature)
+
+    def embed(self, text: str) -> List[float]:
+        self._ensure_loaded()
+        return self._model.embed(text)
+
+    def health_check(self) -> bool:
+        if self._model is None:
+            return False
+        return self._model.health_check()
+
+    def list_models(self) -> list:
+        return [self._chat_model]
+
+
+# =============================================================================
 # MOTOR RAG OPTIMIZADO
 # =============================================================================
 
 class DocChatEngine:
     """Motor principal con soporte local (LM Studio) y cloud (OpenAI)."""
 
-    def __init__(self):
+    def __init__(self, mode: str = "lmstudio"):
         self.lm = LMStudioClient()
         self.openai = OpenAIClient()
+        self.local_gguf = LocalModelClient()
         self.vector_store = VectorStore()
-        self.chat_model = CHAT_MODEL
+        self.chat_model = config.CHAT_MODEL
         self.openai_model = "gpt-4o-mini"
-        self._mode = "local"  # "local" o "cloud"
+        self._mode = "lmstudio"  # "lmstudio", "cloud", "local_gguf"
+        self._embed_cache = {}  # Caché simple: hash(texto) -> embedding
+        if mode in ("lmstudio", "cloud", "local_gguf"):
+            self._mode = mode
+
+    def _get_cached_embedding(self, text: str) -> List[float]:
+        """Embedding con caché LRU simple (evita re-embedear la misma pregunta)."""
+        key = hashlib.md5(text.encode()).hexdigest()
+        if key in self._embed_cache:
+            return self._embed_cache[key]
+        emb = self._client().embed(text)
+        # Mantener caché limitado a 128 entradas
+        if len(self._embed_cache) > 128:
+            self._embed_cache.clear()
+        self._embed_cache[key] = emb
+        return emb
 
     @property
     def mode(self) -> str:
         return self._mode
 
     def set_mode(self, mode: str, api_key: str = ""):
-        """Cambiar modo: 'local' (LM Studio) o 'cloud' (OpenAI)."""
+        """Cambiar modo: 'lmstudio' (LM Studio), 'cloud' (OpenAI) o 'local_gguf'."""
         self._mode = mode
         if mode == "cloud" and api_key:
             self.openai = OpenAIClient(api_key)
 
     def _client(self):
-        """Obtener el cliente activo."""
-        return self.openai if self._mode == "cloud" else self.lm
+        """Obtener el cliente activo según el modo."""
+        return {
+            "cloud": self.openai,
+            "local_gguf": self.local_gguf,
+        }.get(self._mode, self.lm)
 
     def is_available(self) -> bool:
-        if self._mode == "cloud":
-            return self.openai.health_check()
-        return self.lm.health_check()
+        return self._client().health_check()
 
     def available_models(self) -> list:
+        client = self._client()
+        models = client.list_models()
         if self._mode == "cloud":
-            models = self.openai.list_models()
             return [m for m in models if "gpt" in m.lower() or "o3" in m.lower()]
-        models = self.lm.list_models()
-        return [m for m in models if "embed" not in m.lower()]
+        if self._mode == "lmstudio":
+            return [m for m in models if "embed" not in m.lower()]
+        return models  # local_gguf
 
     def add_document(self, filepath: str,
                      on_progress: Callable = None) -> Dict:
@@ -494,8 +453,8 @@ class DocChatEngine:
 
         # RAG: intentar embeddings, si falla, enviar contexto directamente
         try:
-            q_embedding = self._client().embed(question)
-            results = self.vector_store.search(q_embedding, top_k=TOP_K)
+            q_embedding = self._get_cached_embedding(question)
+            results = self.vector_store.search(q_embedding, top_k=config.TOP_K)
             found = bool(results)
         except Exception:
             found = False
@@ -541,18 +500,29 @@ class DocChatEngine:
     def clear(self):
         self.vector_store.clear()
 
-    def summarize(self, on_token=None) -> str:
-        """Resumir documentos."""
+    def summarize(self, on_token=None, lang: str = "es") -> str:
+        """Resumir documentos en el idioma seleccionado."""
         if self.vector_store.count == 0:
-            msg = "No hay documentos cargados."
+            msg = {"es": "No hay documentos cargados.", "en": "No documents loaded."}.get(lang, "No hay documentos cargados.")
             if on_token:
                 for c in msg: on_token(c)
             return msg
         sources = ", ".join(self.vector_store.sources)
         texts = [d["text"][:300] for d in self.vector_store.documents[:10]]
-        prompt = f"Resume estos documentos:\nFuentes: {sources}\n\n" + "\n---\n".join(texts)
+
+        system_prompt = {
+            "es": "Resume de forma clara y organizada en español.",
+            "en": "Summarize clearly and organized in English.",
+        }.get(lang, "Resume de forma clara y organizada.")
+
+        user_prompt = {
+            "es": f"Resume estos documentos:\nFuentes: {sources}\n\n",
+            "en": f"Summarize these documents:\nSources: {sources}\n\n",
+        }.get(lang, f"Resume estos documentos:\nFuentes: {sources}\n\n")
+
+        prompt = user_prompt + "\n---\n".join(texts)
         messages = [
-            {"role": "system", "content": "Resume de forma clara y organizada."},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ]
         return self._client().chat_stream(messages, on_token=on_token)

@@ -282,7 +282,7 @@ def _load_pptx(filepath: str) -> str:
 
 
 def _load_pdf(filepath: str) -> str:
-    """Cargar PDF (igual que en engine.py original)."""
+    """Cargar PDF con fallback OCR automático para escaneados."""
     from pypdf import PdfReader
     try:
         reader = PdfReader(filepath)
@@ -298,6 +298,7 @@ def _load_pdf(filepath: str) -> str:
                 "Guarda una copia sin protección e intenta de nuevo."
             )
 
+    # Intentar extracción normal primero
     text = []
     for page in reader.pages:
         try:
@@ -307,7 +308,51 @@ def _load_pdf(filepath: str) -> str:
         except Exception:
             pass
 
-    return "\n".join(text)
+    result = "\n".join(text)
+
+    # Detectar si necesita OCR (PDF escaneado)
+    if _needs_ocr(result):
+        logger.info(f"📄 PDF sin texto seleccionable — intentando OCR...")
+        try:
+            from docchat.ocr import ocr_full_pdf, is_tesseract_available
+            if is_tesseract_available():
+                ocr_text = ocr_full_pdf(filepath)
+                if ocr_text.strip():
+                    logger.info(f"✅ OCR completado: {len(ocr_text)} caracteres")
+                    return ocr_text
+            else:
+                raise RuntimeError(
+                    "Tesseract OCR no está instalado.\n\n"
+                    "Para activar OCR en PDFs escaneados:\n"
+                    "  1. Descarga: https://github.com/UB-Mannheim/tesseract/wiki\n"
+                    "  2. Durante la instalación, marca: Spanish + English\n"
+                    "  3. Reinicia DocChat\n\n"
+                    "O usa el modo online con LM Studio para mejor calidad."
+                )
+        except ImportError:
+            raise RuntimeError(
+                "OCR no disponible. Para leer PDFs escaneados:\n"
+                "  pip install pytesseract Pillow pdf2image\n"
+                "  e instala Tesseract OCR (ver docs)"
+            )
+        except RuntimeError:
+            raise  # Re-lanzar errores de Tesseract no instalado
+        except Exception as e:
+            raise RuntimeError(f"Error en OCR: {e}")
+
+    return result
+
+
+def _needs_ocr(text: str) -> bool:
+    """Detectar si un texto extraído probablemente necesita OCR."""
+    if not text or len(text.strip()) < 50:
+        return True
+    words = text.strip().split()
+    real_words = sum(1 for w in words if any(c.isalpha() for c in w))
+    if len(words) == 0:
+        return True
+    ratio = real_words / len(words) if len(words) > 0 else 0
+    return ratio < 0.3  # Menos del 30% son palabras reales
 
 
 def _load_docx(filepath: str) -> str:

@@ -1,228 +1,166 @@
 # 📄 DocChat v3 — Asistente Local de Documentos con IA
 
-> **Chat con tus documentos. 100% local. Sin API keys. Sin internet. Sin LM Studio.**
+> **100% local · Sin API keys · Sin internet · Multi-formato**
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/version-3.0.0-brightgreen)
+DocChat es un asistente de IA que te permite chatear con tus documentos (PDF, Word, Excel, PowerPoint, código y más). Todo funciona 100% local en tu PC.
 
 ---
 
-## 🚀 Novedades v3
+## 🚀 Cómo Empezar
 
-| Mejora | Estado |
-|--------|--------|
-| 🏆 **Modo offline** — Sin LM Studio. Usa llama-cpp-python | ✅ |
-| 🖼️ **OCR** — Lee PDFs escaneados (con Tesseract) | ✅ |
-| 📊 **Multi-formato** — CSV, Excel, PPTX, MD, HTML, código | ✅ |
-| 🌐 **Web UI** — Interfaz desde el navegador (Flask) | ✅ |
-| 📈 **Métricas** — Estadísticas de uso detalladas | ✅ |
-| 🔄 **Auto-updates** — Verifica actualizaciones en GitHub | ✅ |
-| 🎨 **UI mejorada** — Vista previa, modo selector, stats | ✅ |
-| 📦 **Auto-descarga** — El modelo se descarga solo | ✅ |
-
----
-
-## ✨ Características
-
-| Característica | ✅ |
-|---------------|-----|
-| **100% local** — Sin enviar datos a internet | ✅ |
-| **Sin API keys** — No necesita OpenAI ni nada | ✅ |
-| **Sin LM Studio** — Modelo local empaquetado 🏆 | ✅ |
-| **Gratuito** — Sin costos de uso | ✅ |
-| **PDF, DOCX, TXT, MD, HTML, CSV, XLSX, PPTX** | ✅ |
-| **OCR** para PDFs escaneados | ✅ |
-| **Interfaz bonita** — PyQt6 nativa + Web UI | ✅ |
-| **Rápido** — Modelo local optimizado (CPU/GPU) | ✅ |
-| **Privado** — Tus documentos nunca salen de tu PC | ✅ |
-| **Streaming** — Respuestas en tiempo real | ✅ |
-
----
-
-## 📋 Requisitos
-
-### Mínimos (modo offline)
-- **Windows 10/11**, Linux o macOS
-- **4 GB RAM** (8 GB recomendado)
-- **1 GB espacio** para el modelo local
-
-### Opcionales
-- **Tesseract OCR** para PDFs escaneados
-- **LM Studio** si prefieres modo online
-
----
-
-## 🔧 Instalación
-
-### Opción 1: Desde código fuente (recomendado)
-
+### Opción A: Ejecutable (Recomendado)
 ```bash
-# 1. Clonar
+# Descarga DocChat.exe desde GitHub Releases
+# Haz doble clic para ejecutar
+```
+
+### Opción B: Desde código fuente
+```bash
 git clone https://github.com/tuusuario/DocChat.git
 cd DocChat
-
-# 2. Instalar dependencias
 pip install -r requirements.txt
-
-# 3. Instalar modelo local (opcional, se descarga solo)
-#    La primera vez que ejecutes, descargará ~1GB
-
-# 4. Ejecutar
 python run.py
 ```
 
-### Opción 2: Ejecutable (Windows)
+---
 
-1. Descarga `DocChat.exe` desde [GitHub Releases](https://github.com/tuusuario/DocChat/releases)
-2. Haz doble clic para ejecutar
-3. En la primera ejecución, **descarga el modelo automáticamente** (~1GB)
+## 🖥️ Cómo Ejecutar
+
+| Comando | Función |
+|---------|---------|
+| `python run.py` | Interfaz de escritorio (PyQt6) |
+| `python run.py --web` | Web UI en el navegador → http://localhost:5000 |
+| `python run.py --debug` | Modo debug con consola detallada |
+| `python run.py --report` | Mostrar reporte de métricas de uso |
+| `python run.py --update` | Buscar actualizaciones en GitHub |
+| `python run.py --mode lmstudio` | Forzar modo LM Studio |
+| `python run.py --mode cloud` | Forzar modo OpenAI Cloud |
+| `python run.py --mode local_gguf` | Forzar modo GGUF local |
+| `python run.py --mode online` | Alias para `lmstudio` |
+| `python run.py --mode offline` | Alias para `local_gguf` |
 
 ---
 
-## 🎮 Cómo usar
+## 🧠 Modos de Funcionamiento
 
-```
-1. Ejecuta: python run.py (o abre DocChat.exe)
-2. Espera a que se cargue el modelo (primera vez: ~1-2 min)
-3. Arrastra documentos al panel izquierdo
-4. Escribe preguntas sobre ellos
-5. ¡La IA responde en tiempo real!
-```
+### 🖥️ Modo LM Studio (por defecto)
+Conecta con **LM Studio** corriendo en `http://127.0.0.1:1234`.
+- Modelos más grandes, mayor calidad
+- Requiere LM Studio abierto con un modelo cargado
 
-### Opciones de línea de comandos
+### ☁️ Modo Cloud (OpenAI)
+Usa la API de **OpenAI** (modelo `gpt-4o-mini`).
+- Máxima calidad
+- Requiere API key de OpenAI
 
-```bash
-python run.py              # UI de escritorio (recomendado)
-python run.py --web        # Abrir Web UI en el navegador
-python run.py --debug      # Modo debug (consola)
-python run.py --report     # Mostrar reporte de métricas
-python run.py --update     # Buscar actualizaciones
-python run.py --mode offline  # Forzar modo local
-python run.py --mode online   # Forzar LM Studio
-```
+### 🏠 Modo GGUF Local (NUEVO en v3)
+Usa **llama-cpp-python** para inferencia 100% local sin LM Studio.
 
----
+| Modelo | Tamaño | RAM Mínima |
+|--------|--------|------------|
+| Qwen 2.5 1.5B (por defecto) | ~1 GB | 4 GB |
+| Qwen 2.5 0.5B (alternativa ligera) | ~350 MB | 2 GB |
+| Llama 3.2 1B (alternativa) | ~700 MB | 4 GB |
 
-## 🌐 Web UI
-
-Además de la interfaz de escritorio, DocChat incluye una **Web UI**:
-
-```bash
-python run.py --web
-# Abre http://localhost:5000 en tu navegador
-```
-
-O desde la UI: haz clic en el botón **🌐 Web UI**.
+> El modelo se descarga **automáticamente** la primera vez que ejecutas DocChat en modo GGUF.
 
 ---
 
-## 🧠 Modelos
-
-### Modo Local (por defecto)
-- **Qwen 2.5 1.5B** — Descarga automática (~1GB)
-- Alternativa ligera: **Qwen 2.5 0.5B** (~350MB)
-- Para más RAM: **Llama 3.2 1B** (~700MB)
-
-### Modo LM Studio (opcional)
-Si ya tienes LM Studio, puedes usarlo:
-```bash
-python run.py --mode online
-```
-
-O desde la UI: selecciona "☁️ LM Studio" en el selector de modo.
-
----
-
-## 📁 Formatos soportados
+## 📁 Formatos Soportados (20+)
 
 | Formato | Extensión | Cargador |
 |---------|-----------|----------|
-| PDF | .pdf | pypdf + OCR |
-| Word | .docx | python-docx |
-| Texto | .txt | nativo |
-| Markdown | .md | nativo |
-| HTML | .html, .htm | parser HTML |
-| CSV | .csv | csv |
-| Excel | .xlsx, .xls | openpyxl |
-| PowerPoint | .pptx | python-pptx |
-| JSON | .json | json |
-| XML | .xml | nativo |
-| YAML | .yaml, .yml | pyyaml |
-| Código | .py, .js, .ts, .java, .cpp, .c, .go, .rs, .rb, .php, .swift, .kt, .sql, .sh, .bat, .ps1, .r | nativo |
+| PDF | `.pdf` | pypdf + **OCR automático** para escaneados |
+| Word | `.docx` | python-docx |
+| Texto | `.txt` | Nativo |
+| Markdown | `.md` | Nativo |
+| HTML | `.html`, `.htm` | Parser HTML |
+| CSV | `.csv` | csv |
+| Excel | `.xlsx`, `.xls` | openpyxl |
+| PowerPoint | `.pptx` | python-pptx |
+| JSON | `.json` | json |
+| XML | `.xml` | Nativo |
+| YAML | `.yaml`, `.yml` | pyyaml |
+| Código fuente | `.py`, `.js`, `.ts`, `.java`, `.cpp`, `.c`, `.go`, `.rs`, `.rb`, `.php`, `.swift`, `.kt`, `.sql`, `.sh`, `.bat`, `.ps1`, `.r` | Nativo |
 
 ---
 
-## 📊 Estructura del proyecto
+## 🎯 Funcionalidades
 
-```
-DocChat/
-├── run.py                 # Lanzador (CLI + args)
-├── requirements.txt       # Dependencias
-├── DocChat.spec           # PyInstaller config
-├── README.md              # Esta documentación
-├── docchat/
-│   ├── __init__.py
-│   ├── engine.py          # 🏆 Motor RAG v3 (unificado)
-│   ├── local_model.py     # 🧠 Modelo local (llama-cpp-python)
-│   ├── ui.py              # 🖥️ UI de escritorio (PyQt6)
-│   ├── web_ui.py          # 🌐 Web UI (Flask)
-│   ├── ocr.py             # 👁️ OCR para PDFs escaneados
-│   ├── formats.py         # 📊 Multi-formato
-│   ├── metrics.py         # 📈 Métricas de uso
-│   ├── updater.py         # 🔄 Auto-updates
-│   └── lang.py            # 🌍 Traducciones ES/EN
-└── favicon.ico            # Icono
-```
+- 📊 **Resumir documentos** al instante
+- 🔍 **Buscar información** con RAG semántico
+- 🌐 **Traducir respuestas** a inglés/español
+- 📋 **Exportar chat** a TXT
+- 🔄 **Auto-actualizaciones** desde GitHub
+- 🌙 **Tema oscuro/claro** intercambiable
+- 🌍 **Interfaz en español e inglés**
+- 🚀 **Streaming en tiempo real** (SSE real en Web UI)
+- 💾 **Caché de embeddings** para respuestas rápidas
+- 👁️ **OCR** para PDFs escaneados (con Tesseract)
 
 ---
 
 ## 🛠️ Tecnologías
 
 | Tecnología | Para qué |
-|-----------|---------|
-| **Python 3.10+** | Lenguaje base |
-| **PyQt6** | Interfaz de escritorio nativa |
-| **llama-cpp-python** | 🏆 Inferencia local sin LM Studio |
-| **Flask** | 🌐 Web UI alternativa |
-| **pypdf** | Lectura de PDFs |
-| **pytesseract** | 👁️ OCR para escaneados |
-| **python-docx** | Lectura de Word |
-| **python-pptx** | Lectura de PowerPoint |
-| **openpyxl** | Lectura de Excel |
-| **httpx** | Comunicación HTTP |
-| **RAG** | Búsqueda semántica en documentos |
+|------------|----------|
+| Python 3.10+ | Lenguaje base |
+| PyQt6 | Interfaz de escritorio nativa |
+| llama-cpp-python | Inferencia local sin LM Studio |
+| Flask | Web UI alternativa |
+| pypdf | Lectura de PDFs |
+| pytesseract | OCR para escaneados |
+| python-docx | Lectura de Word |
+| python-pptx | Lectura de PowerPoint |
+| openpyxl | Lectura de Excel |
+| httpx | Comunicación HTTP con LM Studio |
+| RAG | Búsqueda semántica en documentos |
 
 ---
 
-## 🤝 Contribuir
+## 📂 Estructura del Proyecto
 
-1. Fork el proyecto
-2. Crea tu rama: `git checkout -b feature/nueva-mejora`
-3. Commit: `git commit -m 'Agrega nueva mejora'`
-4. Push: `git push origin feature/nueva-mejora`
-5. Abre un Pull Request
+```
+DocChat/
+├── run.py                 # 🚀 Lanzador (CLI + args)
+├── requirements.txt       # Dependencias
+├── DocChat.spec           # PyInstaller config
+├── README.md              # Documentación
+├── favicon.ico            # Icono de la aplicación
+├── docchat/
+│   ├── __init__.py
+│   ├── config.py          # ⚙️ Configuración centralizada
+│   ├── version.py         # 📌 Versión del proyecto
+│   ├── engine.py          # 🏆 Motor RAG v3
+│   ├── local_model.py     # 🧠 Modelo local (llama-cpp-python)
+│   ├── ui.py              # 🖥️ UI de escritorio (PyQt6)
+│   ├── web_ui.py          # 🌐 Web UI (Flask)
+│   ├── ocr.py             # 👁️ OCR para PDFs escaneados
+│   ├── formats.py         # 📊 Multi-formato (20+)
+│   ├── metrics.py         # 📈 Métricas de uso
+│   ├── updater.py         # 🔄 Auto-updates
+│   └── lang.py            # 🌍 Traducciones ES/EN
+├── docchat/
+│   └── Guia_DocChat_v3.pdf  # 📄 Guía de usuario completa
+└── dist/
+    └── DocChat.exe        # 📦 Ejecutable portable
+```
+
+---
+
+## 📥 Requisitos
+
+- **Sistema:** Windows 10/11, Linux o macOS
+- **RAM:** 4 GB (8 GB recomendado)
+- **Disco:** 1 GB libre
+- **Python:** 3.10+ (solo código fuente)
+
+### Opcionales
+- **Tesseract OCR** → Para leer PDFs escaneados
+- **LM Studio** → Para modo LM Studio con modelos grandes
 
 ---
 
 ## 📄 Licencia
 
 MIT — Haz lo que quieras con este código.
-
----
-
-## 🏆 ¿Por qué este proyecto brilla?
-
-| Aspecto | Lo que demuestra |
-|---------|-----------------|
-| **RAG** | Técnica más demandada en 2026 |
-| **Arquitectura limpia** | Módulos separados, código legible |
-| **UI dual** | Escritorio + Web |
-| **IA local** | Sin depender de APIs externas |
-| **Producto completo** | De principio a fin, listo para producción |
-| **Documentación** | README completo, guía de usuario |
-| **Auto-instalable** | Descarga de modelo, updates, empaquetado |
-
----
-
-**¿Preguntas?** Abre un issue o contribuye al proyecto.

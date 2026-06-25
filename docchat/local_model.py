@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import List, Dict, Optional, Callable, Tuple, Generator
 from dataclasses import dataclass, field
 
+from docchat import config
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,32 +33,24 @@ logger = logging.getLogger(__name__)
 # CONFIGURACIÓN DE MODELOS
 # =============================================================================
 
+# Las constantes están centralizadas en docchat/config.py
+# Los valores por defecto se importan desde allí.
+
 # Modelo pequeño recomendado: Qwen2.5-1.5B-Instruct Q4_K_M (~1GB)
-# Descomenta el que prefieras:
-DEFAULT_MODEL_REPO = "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
-DEFAULT_MODEL_FILE = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
-
-# Alternativa más ligera: Qwen2.5-0.5B (~350MB)
-# DEFAULT_MODEL_REPO = "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
-# DEFAULT_MODEL_FILE = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
-
-# Alternativa para 4GB RAM: Llama 3.2 1B (~700MB)
-# DEFAULT_MODEL_REPO = "QuantFactory/Llama-3.2-1B-Instruct-GGUF"
-# DEFAULT_MODEL_FILE = "Llama-3.2-1B-Instruct.Q4_K_M.gguf"
-
-HF_BASE_URL = "https://huggingface.co"
-MODELS_DIR = os.path.join(os.path.expanduser("~"), ".docchat", "models")
-CHAT_MODEL_NAME = "docchat_local"  # Nombre interno
+# Descomenta el que prefieras en config.py:
+#   - Qwen2.5-1.5B: ~1GB, 4GB RAM mínimo
+#   - Qwen2.5-0.5B: ~350MB, 2GB RAM mínimo
+#   - Llama 3.2 1B: ~700MB, 4GB RAM
 
 
 # =============================================================================
 # DESCARGA DE MODELOS
 # =============================================================================
 
-def get_model_path(model_file: str = DEFAULT_MODEL_FILE) -> str:
+def get_model_path(model_file: str = config.DEFAULT_MODEL_FILE) -> str:
     """Obtener la ruta del modelo GGUF, descargarlo si no existe."""
-    os.makedirs(MODELS_DIR, exist_ok=True)
-    model_path = os.path.join(MODELS_DIR, model_file)
+    os.makedirs(config.MODELS_DIR, exist_ok=True)
+    model_path = os.path.join(config.MODELS_DIR, model_file)
 
     if os.path.exists(model_path):
         logger.info(f"✅ Modelo encontrado: {model_path}")
@@ -67,7 +61,7 @@ def get_model_path(model_file: str = DEFAULT_MODEL_FILE) -> str:
     print(f"\n📥 Descargando modelo {model_file} (~1GB)...")
     print("   Esto solo ocurre la primera vez.\n")
 
-    url = f"{HF_BASE_URL}/{DEFAULT_MODEL_REPO}/resolve/main/{model_file}"
+    url = f"{config.HF_BASE_URL}/{config.DEFAULT_MODEL_REPO}/resolve/main/{model_file}"
     _download_file(url, model_path)
 
     return model_path

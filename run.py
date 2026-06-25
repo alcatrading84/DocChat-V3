@@ -11,6 +11,7 @@ USO:
 
 import sys
 import os
+import logging
 import traceback
 import argparse
 
@@ -104,8 +105,9 @@ def parse_args():
                         help="Mostrar reporte de métricas")
     parser.add_argument("--update", action="store_true",
                         help="Buscar actualizaciones")
-    parser.add_argument("--mode", type=str, choices=["auto", "offline", "online"],
-                        default="auto", help="Modo de inferencia")
+    parser.add_argument("--mode", type=str,
+                        choices=["lmstudio", "cloud", "local_gguf", "auto", "offline", "online"],
+                        default="lmstudio", help="Modo de inferencia")
     return parser.parse_args()
 
 
@@ -115,6 +117,10 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    # Mapear modos legacy a los nuevos
+    mode_map = {"auto": "lmstudio", "offline": "local_gguf", "online": "lmstudio"}
+    engine_mode = mode_map.get(args.mode, args.mode)
 
     # Configurar logging
     if args.debug:
@@ -136,7 +142,7 @@ def main():
     if args.report:
         print("\n📊 Generando reporte de DocChat...")
         from docchat.engine import DocChatEngine
-        engine = DocChatEngine(mode=args.mode)
+        engine = DocChatEngine(mode=engine_mode)
         engine.print_report()
         sys.exit(0)
 
@@ -157,7 +163,7 @@ def main():
         print("\n🌐 Iniciando DocChat Web UI...")
         from docchat.engine import DocChatEngine
         from docchat.web_ui import start_web_ui
-        engine = DocChatEngine(mode=args.mode)
+        engine = DocChatEngine(mode=engine_mode)
         server = start_web_ui(engine, host="127.0.0.1", port=5000,
                               open_browser=True)
         print("Presiona Ctrl+C para detener el servidor.")
@@ -178,6 +184,7 @@ def main():
         from docchat.ui import main as ui_main
         ui_main()
     except Exception as e:
+        error_detail = traceback.format_exc()
         print(f"\n❌ Error al iniciar DocChat: {e}")
         traceback.print_exc()
         input("\nPresiona Enter para salir...")
