@@ -1,5 +1,15 @@
 # 📄 DocChat v3 — Asistente Local de Documentos con IA
 
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat&logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey?style=flat)
+![PyQt6](https://img.shields.io/badge/UI-PyQt6-41CD52?style=flat&logo=qt&logoColor=white)
+![Flask](https://img.shields.io/badge/Web-Flask-000000?style=flat&logo=flask&logoColor=white)
+![RAG](https://img.shields.io/badge/RAG-Semantic%20Search-8B5CF6?style=flat)
+![OCR](https://img.shields.io/badge/OCR-Tesseract-FF6B35?style=flat)
+![LLM](https://img.shields.io/badge/LLM-GGUF%20%7C%20LM%20Studio%20%7C%20OpenAI-00A67E?style=flat)
+![Status](https://img.shields.io/badge/Status-Stable-22C55E?style=flat)
+
 > **100% local · Sin API keys · Sin internet · Multi-formato**
 
 DocChat es un asistente de IA que te permite chatear con tus documentos (PDF, Word, Excel, PowerPoint, código y más). Todo funciona 100% local en tu PC.
@@ -8,16 +18,19 @@ DocChat es un asistente de IA que te permite chatear con tus documentos (PDF, Wo
 
 ## 🚀 Cómo Empezar
 
+[![Download](https://img.shields.io/badge/Download-Latest%20Release-3A83F1?style=for-the-badge&logo=github)](https://github.com/alcatrading84/DocChat-V3/releases/latest)
+
 ### Opción A: Ejecutable (Recomendado)
 ```bash
-# Descarga DocChat.exe desde GitHub Releases
-# Haz doble clic para ejecutar
+# 1. Ve a GitHub Releases
+# 2. Descarga DocChat.exe
+# 3. Haz doble clic para ejecutar
 ```
 
 ### Opción B: Desde código fuente
 ```bash
-git clone https://github.com/tuusuario/DocChat.git
-cd DocChat
+git clone https://github.com/alcatrading84/DocChat-V3.git
+cd DocChat-V3
 pip install -r requirements.txt
 python run.py
 ```
