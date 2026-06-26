@@ -18,6 +18,20 @@
 
 ---
 
+<p align="center">
+  <img src="screenshot_main.png" alt="DocChat Dark Theme" width="600">
+  <br>
+  <em>DocChat v3 — Dark theme · RAG mode · Real-time AI responses</em>
+</p>
+
+<p align="center">
+  <img src="screenshot_light.png" alt="DocChat Light Theme" width="600">
+  <br>
+  <em>DocChat v3 — Light theme · Bilingual interface (EN/ES)</em>
+</p>
+
+---
+
 ## 🏆 Why DocChat?
 
 DocChat is a **production-ready** AI document assistant built from scratch. It demonstrates proficiency in:
